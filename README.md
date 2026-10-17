@@ -20,6 +20,7 @@ Installable web app (PWA) for learning spoken Arabic from Hebrew. Works offline 
 T col | col | col                (table; first row = header)
 L ب | name | sound | example-ar | example-translit | example-he   (letters lessons)
 D speaker | ar | translit | he   (dialogue lines)
+= category-id                     (dictionary topic for the lesson's words)
 key: ar | Hebrew transliteration | Hebrew meaning [| note]
 ```
 `key` is the stable id used for progress tracking: never rename keys of existing items. Reusing a key for the same Arabic text shares progress; the build fails if a key is reused for different text.
@@ -28,6 +29,7 @@ Transliteration convention: ח=ح, ח'=خ, ע=ع, ע'=غ, ת'=ث, ד'=ذ, צ=ص,
 
 ## Features
 - 14 units / 59 lessons, from letters and harakat to verbs, future/progressive, connectors; unit 14 is bonus everyday situations beyond the course.
+- Dictionary tab: every word grouped by topic (`@category` list, lesson default `= cat`, per-key overrides `C cat: key, key` at the end of course.txt), with conjugation tables, search and a quiz per topic.
 - Lesson: learn (flashcards with audio, letter forms, finger-tracing), practice quiz (meaning, reverse, reading, listening, spelling with letter tiles, dialogue "what comes next"), separate writing and listening drills.
 - Spaced repetition (Leitner boxes 0–7, `KNOWN_BOX` = 5). "המילים שלי" lists hard / learning / known, with manual mark known/unknown.
 - Progression: next lesson unlocks at ≥70% in practice; locked lessons can still be opened; setting to unlock all.

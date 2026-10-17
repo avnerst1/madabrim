@@ -3,7 +3,7 @@
    (generated from course.txt by tools/build-course.mjs). Progress lives in localStorage. */
 'use strict';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const $app = document.getElementById('app');
 const $title = document.getElementById('title');
 const $back = document.getElementById('backBtn');
@@ -461,6 +461,11 @@ function viewQuiz(id, mode) {
     if (mode === 'hard') entries = [...ENTRY.values()].filter((e) => status(e.id) === 'hard');
     if (mode === 'mix') entries = shuffle([...ENTRY.values()].filter((e) => P.items[e.id])).slice(0, 40);
     entries = entries.slice(0, 15); n = Math.min(15, Math.max(entries.length, 1));
+  } else if (id === 'dict') {
+    const cat = (course.categories || []).find((c) => c.id === mode);
+    if (!cat) return viewDict();
+    entries = dictEntries(cat.id); title = 'תרגול: ' + cat.title; back = `#/dict/${cat.id}`;
+    n = Math.min(15, Math.max(8, entries.length)); mode = null;
   } else {
     lesson = LESSONS.find((x) => x.id === id);
     if (!lesson) return viewHome();
@@ -468,7 +473,7 @@ function viewQuiz(id, mode) {
     n = Math.min(14, Math.max(8, Math.round(entries.length * 1.2)));
     P.lessons[lesson.id] = P.lessons[lesson.id] || { best: 0 }; saveP();
   }
-  setHeader(title, back); setTab(id === 'review' ? 'review' : 'home');
+  setHeader(title, back); setTab(id === 'review' ? 'review' : id === 'dict' ? 'dict' : 'home');
   if (!entries.length) { $app.innerHTML = `<div class="empty">אין מה לתרגל כאן כרגע.</div>`; return; }
   const qs = buildQuiz(entries, n, mode === 'hard' || mode === 'mix' ? null : mode);
   let qi = 0, correct = 0;
@@ -654,6 +659,54 @@ function viewWords() {
   render();
 }
 
+// ---------- dictionary by topic ----------
+function dictEntries(catId) {
+  const seenKeys = new Set();
+  return [...ENTRY.values()].filter((e) => {
+    if (e.kind !== 'word' || (catId && e.cat !== catId)) return false;
+    const k = normAr(e.ar) + '|' + e.he;
+    if (seenKeys.has(k)) return false;
+    seenKeys.add(k); return true;
+  });
+}
+function viewDict(catId) {
+  setTab('dict');
+  const cats = course.categories || [];
+  const cat = cats.find((c) => c.id === catId);
+  if (cat) {
+    setHeader(`${cat.icon} ${cat.title}`, '#/dict');
+    const list = dictEntries(cat.id);
+    const tables = LESSONS.filter((l) => l.cat === cat.id && l.table);
+    $app.innerHTML = `${tables.map((l) => `<details class="card" open><summary><b>${esc(l.title)}</b></summary><div style="margin-top:10px">${renderTable(l.table)}</div></details>`).join('')}
+      <a class="btn block" style="margin-bottom:12px" href="#/quiz/dict/${cat.id}">✏️ לתרגל את הנושא (${list.length} מילים)</a>
+      <div class="card">${list.map((e) => entryRow(e)).join('')}</div>`;
+    bindPlay();
+    return;
+  }
+  setHeader('מילון', null);
+  let q = '';
+  const render = () => {
+    let body;
+    if (q) {
+      const nq = normAr(q);
+      const hits = dictEntries().filter((e) => e.he.includes(q) || e.tr.includes(q) || (nq && normAr(e.ar).includes(nq))).slice(0, 200);
+      const catOf = Object.fromEntries(cats.map((c) => [c.id, c]));
+      body = hits.length ? `<div class="card">${hits.map((e) => entryRow(e).replace('<div class="grow">', `<div class="grow"><div><span class="tag">${esc(catOf[e.cat]?.icon || '')} ${esc(catOf[e.cat]?.title || '')}</span></div>`)).join('')}</div>`
+        : '<div class="empty">לא נמצא. נסה מילה אחרת.</div>';
+    } else {
+      body = `<div class="cats">${cats.map((c) => {
+        const n = dictEntries(c.id).length;
+        return n ? `<a class="cat" href="#/dict/${c.id}"><span class="ic">${esc(c.icon)}</span><b>${esc(c.title)}</b><small>${n} מילים</small></a>` : '';
+      }).join('')}</div>`;
+    }
+    $app.innerHTML = `<input type="search" id="q" placeholder="חיפוש בעברית, בערבית או בתעתיק" value="${esc(q)}">${body}`;
+    bindPlay();
+    const input = document.getElementById('q');
+    input.oninput = () => { q = input.value.trim(); const pos = input.selectionStart; render(); const i2 = document.getElementById('q'); i2.focus(); i2.setSelectionRange(pos, pos); };
+  };
+  render();
+}
+
 // ---------- letters ----------
 function allLetters() {
   return [...ENTRY.values()].filter((e) => e.kind === 'letter' && isSingleLetter(e.ar));
@@ -789,6 +842,7 @@ function route() {
   else if (r === 'quiz') viewQuiz(a, b);
   else if (r === 'review') viewReview();
   else if (r === 'words') viewWords();
+  else if (r === 'dict') viewDict(a);
   else if (r === 'letters') viewLetters(a);
   else if (r === 'settings') viewSettings();
   else viewHome();

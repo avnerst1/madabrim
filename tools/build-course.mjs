@@ -8,7 +8,8 @@ if (!dir) { console.error('usage: node tools/build-course.mjs courses/<id>'); pr
 const src = fs.readFileSync(path.join(dir, 'course.txt'), 'utf8').split('\n');
 
 const AR = /[؀-ۿ]/;
-const course = { id: '', title: '', lang: '', ui: '', version: 1, units: [] };
+const course = { id: '', title: '', lang: '', ui: '', version: 1, categories: [], units: [] };
+const overrides = new Map();
 let unit = null, lesson = null;
 const errors = [];
 const seen = new Map();
@@ -21,6 +22,14 @@ src.forEach((raw, i) => {
   if (line.startsWith('@course')) {
     const [id, title, lang, ui, version] = split(line.slice(7));
     Object.assign(course, { id, title, lang, ui, version: Number(version) || 1 });
+  } else if (line.startsWith('@category')) {
+    const [id, icon, title] = split(line.slice(9));
+    course.categories.push({ id, icon, title });
+  } else if (line.startsWith('= ')) {
+    lesson.cat = line.slice(2).trim();
+  } else if (line.startsWith('C ')) {
+    const m = line.slice(2).match(/^(\w+):\s*(.*)$/);
+    for (const k of m[2].split(',').map((x) => x.trim()).filter(Boolean)) overrides.set(k, { cat: m[1], at });
   } else if (line.startsWith('## ')) {
     const [id, type, title] = split(line.slice(3));
     lesson = { id, type, title, intro: [], table: [], letters: [], items: [], lines: [] };
@@ -59,6 +68,15 @@ src.forEach((raw, i) => {
   }
 });
 
+const catIds = new Set(course.categories.map((c) => c.id));
+for (const [k, o] of overrides) {
+  if (!seen.has(k)) errors.push(`${o.at}: category override for unknown key "${k}"`);
+  if (!catIds.has(o.cat)) errors.push(`${o.at}: unknown category "${o.cat}"`);
+}
+for (const u of course.units) for (const l of u.lessons) {
+  if (catIds.size && !catIds.has(l.cat)) errors.push(`lesson ${l.id}: missing or unknown category "${l.cat}"`);
+  for (const it of l.items) it.cat = overrides.get(it.id)?.cat || l.cat;
+}
 for (const u of course.units) for (const l of u.lessons) {
   for (const k of ['intro', 'table', 'letters', 'items', 'lines']) if (!l[k].length) delete l[k];
 }
