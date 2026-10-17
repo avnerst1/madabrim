@@ -1,0 +1,17 @@
+{
+  "name": "מדברים – ערבית מדוברת",
+  "short_name": "מדברים",
+  "description": "לימוד ערבית מדוברת לדוברי עברית, עובד גם בלי אינטרנט",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f3ec",
+  "theme_color": "#1f6f5c",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

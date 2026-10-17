@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>מדברים – ערבית</title>
+  <meta name="description" content="לימוד ערבית מדוברת לדוברי עברית, עובד גם בלי אינטרנט">
+  <meta name="theme-color" content="#1f6f5c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="מדברים">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="backBtn" aria-label="חזרה" hidden>→</button>
+    <h1 id="title">מדברים</h1>
+    <span class="net" id="net" title="מצב חיבור"></span>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+  <main id="app" tabindex="-1"></main>
+  <nav class="tabs" id="tabs">
+    <a href="#/" data-tab="home"><span>🏠</span>שיעורים</a>
+    <a href="#/review" data-tab="review"><span>🔁</span>חזרה</a>
+    <a href="#/words" data-tab="words"><span>📒</span>המילים שלי</a>
+    <a href="#/letters" data-tab="letters"><span>ا ب</span>אותיות</a>
+    <a href="#/settings" data-tab="settings"><span>⚙️</span>הגדרות</a>
+  </nav>
+  <script src="app.js"></script>
+</body>
+</html>

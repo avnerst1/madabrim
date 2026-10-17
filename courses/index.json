@@ -1,0 +1,8 @@
+{
+  "courses": [
+    { "id": "ar-he", "title": "ערבית", "flag": "ع", "file": "courses/ar-he/course.json" },
+    { "id": "es-he", "title": "ספרדית", "flag": "🇪🇸", "file": null },
+    { "id": "ru-he", "title": "רוסית", "flag": "🇷🇺", "file": null },
+    { "id": "pt-he", "title": "פורטוגזית", "flag": "🇧🇷", "file": null }
+  ]
+}
