@@ -3,7 +3,7 @@
    (generated from course.txt by tools/build-course.mjs). Progress lives in localStorage. */
 'use strict';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const $app = document.getElementById('app');
 const $title = document.getElementById('title');
 const $back = document.getElementById('backBtn');

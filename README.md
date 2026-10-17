@@ -28,7 +28,7 @@ key: ar | Hebrew transliteration | Hebrew meaning [| note]
 Transliteration convention: ח=ح, ח'=خ, ע=ع, ע'=غ, ת'=ث, ד'=ذ, צ=ص, צ'=ض, ט=ط, ט'=ظ, ג'=ج, ק=ق, כ=ك.
 
 ## Features
-- 14 units / 59 lessons, from letters and harakat to verbs, future/progressive, connectors; unit 14 is bonus everyday situations beyond the course.
+- 15 units / 65 lessons, from letters and harakat to verbs, future/progressive, connectors; unit 14 is bonus everyday situations beyond the course; unit 15 is medical Arabic (avner is a medical student).
 - Dictionary tab: every word grouped by topic (`@category` list, lesson default `= cat`, per-key overrides `C cat: key, key` at the end of course.txt), with conjugation tables, search and a quiz per topic.
 - Lesson: learn (flashcards with audio, letter forms, finger-tracing), practice quiz (meaning, reverse, reading, listening, spelling with letter tiles, dialogue "what comes next"), separate writing and listening drills.
 - Spaced repetition (Leitner boxes 0–7, `KNOWN_BOX` = 5). "המילים שלי" lists hard / learning / known, with manual mark known/unknown.
