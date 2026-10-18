@@ -235,3 +235,36 @@ input[type="range"] { width: 50%; accent-color: var(--brand); }
 .cat .ic { font-size: 26px; }
 .cat small { color: var(--muted); }
 details > summary { cursor: pointer; }
+
+/* hint (hidden transliteration) */
+.hint-btn { background: none; border: 1px dashed var(--line); color: var(--muted); border-radius: 10px; padding: 4px 12px; margin: 6px 0; cursor: pointer; font-size: 14px; }
+.hint-btn[hidden] { display: none; }
+
+/* sentence builder */
+.sent-answer { min-height: 64px; border: 2px dashed var(--line); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-start; padding: 8px; margin-bottom: 12px; direction: rtl; }
+.word-tile { height: auto; min-height: 48px; font-size: 24px; padding: 2px 12px; }
+.sent-answer .word-tile { border-color: var(--brand); background: var(--brand-soft); }
+
+/* conjugation tables in the quick dictionary */
+.conj-table td, .conj-table th { padding: 2px 6px; font-size: 15px; }
+.conj-table .ar { font-size: 19px; }
+
+/* quick dictionary button + sheets */
+.fab {
+  position: fixed; inset-inline-end: 14px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 6;
+  width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--accent); color: #fff;
+  font-size: 22px; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); cursor: pointer;
+}
+dialog.sheet {
+  width: min(680px, calc(100% - 16px)); max-height: 86vh; margin: auto auto 8px; padding: 0;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--bg); color: var(--text);
+}
+dialog.sheet::backdrop { background: rgba(0, 0, 0, .4); }
+.sheet-head { position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 12px 14px 6px; display: flex; gap: 8px; align-items: center; }
+.sheet-head input { flex: 1; margin: 0; }
+.sheet-head h3 { flex: 1; margin: 0; }
+.sheet-body { padding: 4px 14px 14px; overflow-y: auto; max-height: calc(86vh - 70px); }
+.icon-close { background: none; border: 0; font-size: 22px; color: var(--muted); cursor: pointer; min-width: 40px; min-height: 40px; }
+.explain-out { white-space: pre-wrap; line-height: 1.7; }
+.explain-out .ar { font-size: 20px; }
+.mini-btn { min-height: 34px; padding: 4px 10px; font-size: 14px; }

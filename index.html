@@ -31,6 +31,15 @@
     <a href="#/letters" data-tab="letters"><span>ا ب</span>אותיות</a>
     <a href="#/settings" data-tab="settings"><span>⚙️</span>הגדרות</a>
   </nav>
+  <button class="fab" id="qdBtn" aria-label="מילון מהיר" title="מילון מהיר">🔎</button>
+  <dialog class="sheet" id="qd">
+    <div class="sheet-head"><input type="search" id="qdInput" placeholder="כתוב מילה בעברית (או בערבית)" autocomplete="off"><button class="icon-close" data-close aria-label="סגירה">✕</button></div>
+    <div class="sheet-body" id="qdOut"></div>
+  </dialog>
+  <dialog class="sheet" id="ex">
+    <div class="sheet-head"><h3>✨ הסבר מ-Claude</h3><button class="icon-close" data-close aria-label="סגירה">✕</button></div>
+    <div class="sheet-body" id="exOut"></div>
+  </dialog>
   <script src="app.js"></script>
 </body>
 </html>

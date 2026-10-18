@@ -8,11 +8,28 @@ if (!dir) { console.error('usage: node tools/build-course.mjs courses/<id>'); pr
 const src = fs.readFileSync(path.join(dir, 'course.txt'), 'utf8').split('\n');
 
 const AR = /[؀-ۿ]/;
-const course = { id: '', title: '', lang: '', ui: '', version: 1, categories: [], units: [] };
+const course = { id: '', title: '', lang: '', ui: '', version: 1, categories: [], units: [], tenses: [], verbs: [] };
 const overrides = new Map();
-let unit = null, lesson = null;
+let unit = null, lesson = null, verb = null;
 const errors = [];
 const seen = new Map();
+// conjugation drills: tenses a lesson can unlock ("X <tense>"), all but past derived from the bare (subjunctive) form
+const TENSES = { present: 'הווה', want: 'רוצה ל... (بِدّي)', future: 'עתיד (رَح)', progressive: 'עכשיו (عَم)', past: 'עבר' };
+const BIDD = [['بِدّي', 'בִּדִּי'], ['بِدَّك', 'בִּדַּכּ'], ['بِدِّك', 'בִּדֶּכּ'], ['بِدُّه', 'בִּדּוֹ'], ['بِدّها', 'בִּדְּהַא'], ['بِدّنا', 'בִּדְּנַא'], ['بِدّكُم', 'בִּדְּכֹּם'], ['بِدّهُم', 'בִּדְּהֹם']];
+function present([ar, tr], person) {
+  if (person === 0) return [ar.replace(/^آ/, 'با').replace(/^أَ?/, 'بَ'), tr.replace(/^אַ/, 'בַּ')];
+  if (/^ي/.test(ar)) return ['بي' + ar.slice(1).replace(/^ِ/, ''), /^י[ְִ]/.test(tr) ? 'בִּי' + tr.slice(2) : 'בְּ' + tr];
+  return tr[1] === 'ְ' ? ['بِ' + ar, 'בִּ' + tr] : ['بْ' + ar, 'בְּ' + tr];
+}
+function deriveTenses(v) {
+  const s = v.forms.subj;
+  if (!s) return;
+  v.forms.present = s.map(present);
+  v.forms.future = s.map(([ar, tr]) => ['رَح ' + ar, 'רַח ' + tr]);
+  v.forms.progressive = s.map(([ar, tr]) => ['عَم ' + ar, 'עַם ' + tr]);
+  v.forms.want = s.map(([ar, tr], i) => [BIDD[i][0] + ' ' + ar, BIDD[i][1] + ' ' + tr]);
+  delete v.forms.subj;
+}
 const split = (s) => s.split('|').map((x) => x.trim());
 
 src.forEach((raw, i) => {
@@ -25,6 +42,18 @@ src.forEach((raw, i) => {
   } else if (line.startsWith('@category')) {
     const [id, icon, title] = split(line.slice(9));
     course.categories.push({ id, icon, title });
+  } else if (line.startsWith('@verb')) {
+    const [id, he] = split(line.slice(5));
+    verb = { id, he, forms: {} };
+    course.verbs.push(verb);
+  } else if (/^V[SP] /.test(line)) {
+    const cells = split(line.slice(3)).map((c) => c.split('~').map((x) => x.trim()));
+    if (cells.length !== 8 || cells.some((c) => c.length !== 2 || !AR.test(c[0]) || AR.test(c[1]))) errors.push(`${at}: verb row needs 8 "ar ~ tr" cells`);
+    verb.forms[line[1] === 'S' ? 'subj' : 'past'] = cells;
+  } else if (line.startsWith('X ')) {
+    const id = line.slice(2).trim();
+    if (!TENSES[id]) errors.push(`${at}: unknown tense "${id}"`);
+    else course.tenses.push({ id, title: TENSES[id], lesson: lesson.id });
   } else if (line.startsWith('= ')) {
     lesson.cat = line.slice(2).trim();
   } else if (line.startsWith('C ')) {
@@ -68,6 +97,7 @@ src.forEach((raw, i) => {
   }
 });
 
+course.verbs.forEach(deriveTenses);
 const catIds = new Set(course.categories.map((c) => c.id));
 for (const [k, o] of overrides) {
   if (!seen.has(k)) errors.push(`${o.at}: category override for unknown key "${k}"`);
@@ -84,4 +114,4 @@ if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 fs.writeFileSync(path.join(dir, 'course.json'), JSON.stringify(course));
 const lessons = course.units.flatMap((u) => u.lessons);
 const count = lessons.reduce((n, l) => n + (l.items?.length || 0) + (l.letters?.length || 0) + (l.lines?.length || 0), 0);
-console.log(`${course.id} v${course.version}: ${course.units.length} units, ${lessons.length} lessons, ${count} entries`);
+console.log(`${course.id} v${course.version}: ${course.units.length} units, ${lessons.length} lessons, ${count} entries, ${course.verbs.length} verbs, tenses: ${course.tenses.map((t) => t.id).join(' ')}`);

@@ -22,15 +22,25 @@ L ب | name | sound | example-ar | example-translit | example-he   (letters less
 D speaker | ar | translit | he   (dialogue lines)
 = category-id                     (dictionary topic for the lesson's words)
 key: ar | Hebrew transliteration | Hebrew meaning [| note]
+X present|want|future|progressive|past   (this lesson unlocks that tense in the conjugation drills)
+@verb id | Hebrew infinitive      (verb paradigm, anywhere; followed by:)
+VS ar ~ tr | ... (8 cells)        bare/subjunctive forms: أنا إنتَ إنتِ هو هي إحنا إنتو هُمّ
+VP ar ~ tr | ... (8 cells)        past forms
 ```
+Present (بـ), رَح, عَم and بِدّي forms are derived from VS by tools/build-course.mjs.
 `key` is the stable id used for progress tracking: never rename keys of existing items. Reusing a key for the same Arabic text shares progress; the build fails if a key is reused for different text.
 
 Transliteration convention: ח=ح, ח'=خ, ע=ع, ע'=غ, ת'=ث, ד'=ذ, צ=ص, צ'=ض, ט=ط, ט'=ظ, ג'=ج, ק=ق, כ=ك.
 
 ## Features
-- 15 units / 65 lessons, from letters and harakat to verbs, future/progressive, connectors; unit 14 is bonus everyday situations beyond the course; unit 15 is medical Arabic (avner is a medical student).
+- 16 units / 68 lessons (unit 16 = past tense), from letters and harakat to verbs, future/progressive, connectors; unit 14 is bonus everyday situations beyond the course; unit 15 is medical Arabic (avner is a medical student).
 - Dictionary tab: every word grouped by topic (`@category` list, lesson default `= cat`, per-key overrides `C cat: key, key` at the end of course.txt), with conjugation tables, search and a quiz per topic.
 - Lesson: learn (flashcards with audio, letter forms, finger-tracing), practice quiz (meaning, reverse, reading, listening, spelling with letter tiles, dialogue "what comes next"), separate writing and listening drills.
+- Conjugation drills (`#/quiz/conj`, Review tab, conj lessons): pick the right form for a person/tense, who does it, which tense; only tenses from lessons already opened. 14 verb paradigms.
+- Sentence building (`#/quiz/sent`, lesson button, mixed into quizzes): order word tiles with distractors.
+- Hebrew→Arabic prompts hide the transliteration behind a "💡 הצג תעתיק" button.
+- Quick dictionary: floating 🔎 button on every screen; Hebrew or Arabic search, verb infinitive shows a conjugation table.
+- "✨ הסבר עם Claude" (online only): without a key opens claude.ai/new?q=<prompt>; with an API key in settings calls claude-opus-5-5 (effort low, server-side fallback) via @anthropic-ai/sdk loaded from jsdelivr on demand; answers cached in localStorage `lingo:explain`.
 - Spaced repetition (Leitner boxes 0–7, `KNOWN_BOX` = 5). "המילים שלי" lists hard / learning / known, with manual mark known/unknown.
 - Progression: next lesson unlocks at ≥70% in practice; locked lessons can still be opened; setting to unlock all.
 - Audio: browser speech synthesis (works offline when the phone has an Arabic voice installed). Online-only extras: pronunciation check via speech recognition (ar-JO), Google Translate link.
