@@ -3,7 +3,7 @@
    (generated from course.txt by tools/build-course.mjs). Progress lives in localStorage. */
 'use strict';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 const $app = document.getElementById('app');
 const $title = document.getElementById('title');
 const $back = document.getElementById('backBtn');
@@ -760,7 +760,7 @@ function renderBuild(q, top, record, next) {
   const refresh = () => {
     ans.textContent = chosen.length ? arText(chosen.map((k) => tiles[k].t).join('')) : ' ';
     $app.querySelectorAll('.tile').forEach((b) => b.classList.toggle('used', chosen.includes(+b.dataset.k)));
-    checkBtn.disabled = chosen.length !== target.length;
+    checkBtn.disabled = !chosen.length;
   };
   $app.querySelectorAll('.tile').forEach((b) => (b.onclick = () => { if (!chosen.includes(+b.dataset.k)) { chosen.push(+b.dataset.k); refresh(); } }));
   document.getElementById('undo').onclick = () => { chosen.pop(); refresh(); };
@@ -804,7 +804,7 @@ function renderSentence(q, top, record, next) {
     ans.innerHTML = chosen.map((k, i) => `<button class="tile word-tile ar" data-i="${i}" lang="ar">${esc(arText(tiles[k]))}</button>`).join('');
     ans.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => { if (!done) { chosen.splice(+b.dataset.i, 1); refresh(); } }));
     $app.querySelectorAll('.tiles .tile').forEach((b) => b.classList.toggle('used', chosen.includes(+b.dataset.k)));
-    checkBtn.disabled = chosen.length !== target.length;
+    checkBtn.disabled = !chosen.length;
   };
   $app.querySelectorAll('.tiles .tile').forEach((b) => (b.onclick = () => { if (!chosen.includes(+b.dataset.k)) { chosen.push(+b.dataset.k); refresh(); } }));
   document.getElementById('undo').onclick = () => { chosen.pop(); refresh(); };
