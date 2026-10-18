@@ -35,7 +35,8 @@ Transliteration convention: ח=ح, ח'=خ, ע=ع, ע'=غ, ת'=ث, ד'=ذ, צ=ص,
 ## Features
 - 16 units / 68 lessons (unit 16 = past tense), from letters and harakat to verbs, future/progressive, connectors; unit 14 is bonus everyday situations beyond the course; unit 15 is medical Arabic (avner is a medical student).
 - Dictionary tab: every word grouped by topic (`@category` list, lesson default `= cat`, per-key overrides `C cat: key, key` at the end of course.txt), with conjugation tables, search and a quiz per topic.
-- Lesson: learn (flashcards with audio, letter forms, finger-tracing), practice quiz (meaning, reverse, reading, listening, spelling with letter tiles, dialogue "what comes next"), separate writing and listening drills.
+- Lesson: learn (flashcards), and "תרגול מלא" (`lessonQuiz`), ordered easy→hard: recognise (ar→he, listen) → recall (he→ar) → spell with letter tiles → conjugations (conj lessons) → cloze "which form fits the sentence" → sentence building → typing a whole sentence (similarity ≥ 0.85). Sentences come from the lesson, else from sentences using its words (`sentencesFor`). Focused drills sit in a collapsed "תרגולים ממוקדים" box.
+- Cloze distractors: verb paradigms (past only inside the past unit), بِدّي forms, or generated gender/number/person forms of adjectives and ب-verbs (`inflections`).
 - Conjugation drills (`#/quiz/conj`, Review tab, conj lessons): pick the right form for a person/tense, who does it, which tense; only tenses from lessons already opened. 14 verb paradigms.
 - Sentence building (`#/quiz/sent`, lesson button, mixed into quizzes): order word tiles with distractors.
 - Hebrew→Arabic prompts hide the transliteration behind a "💡 הצג תעתיק" button.

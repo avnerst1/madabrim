@@ -270,3 +270,6 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, .4); }
 .mini-btn { min-height: 34px; padding: 4px 10px; font-size: 14px; }
 .conj-table tr.hl td { background: var(--good-soft); font-weight: 600; }
 .conj-table td[data-play] { cursor: pointer; }
+.blank { display: inline-block; min-width: 70px; border-bottom: 3px solid var(--accent); color: transparent; }
+.type-box { width: 100%; font-size: 26px; border: 2px solid var(--line); border-radius: 12px; padding: 8px 12px; background: var(--card); color: var(--text); resize: vertical; }
+details.focused summary { cursor: pointer; font-weight: 600; color: var(--brand); }

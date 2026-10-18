@@ -3,7 +3,7 @@
    (generated from course.txt by tools/build-course.mjs). Progress lives in localStorage. */
 'use strict';
 
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.5.0';
 const $app = document.getElementById('app');
 const $title = document.getElementById('title');
 const $back = document.getElementById('backBtn');
@@ -144,7 +144,7 @@ const EXTRA = new Map();  // id -> generated entry (verb forms) that isn't part 
 const anyEntry = (id) => ENTRY.get(id) || EXTRA.get(id);
 
 function indexCourse() {
-  LESSONS = []; ENTRY.clear();
+  LESSONS = []; ENTRY.clear(); CLOZE_WORDS = null;
   course.units.forEach((u, ui) => u.lessons.forEach((l) => {
     l.unit = u; l.unitIndex = ui; l.index = LESSONS.length; LESSONS.push(l);
     l.entries = [];
@@ -283,14 +283,17 @@ function viewLesson(id) {
   const isDialogue = l.type === 'dialogue';
   const buildable = l.entries.filter(canBuild).length >= 3;
   let html = `<div class="muted small" style="margin-bottom:6px">${esc(l.unit.title)}</div>${renderIntro(l)}
-  <div class="btns" style="margin-bottom:12px">
+  <div class="btns">
     <a class="btn" href="#/learn/${l.id}">📖 ללמוד</a>
-    <a class="btn" href="#/quiz/${l.id}">✏️ לתרגל</a>
-    ${buildable ? `<a class="btn secondary" href="#/quiz/${l.id}/build">✍️ כתיבה</a>` : ''}
+    <a class="btn" href="#/quiz/${l.id}">✏️ תרגול מלא</a>
+  </div>
+  <p class="small muted" style="margin:6px 4px 8px">התרגול המלא מתחיל קל (לזהות ולבחור מילים), ממשיך לכתיבה באותיות${l.cat === 'conj' ? ' ולהטיות' : ''}, ונגמר בבניית משפטים וכתיבת משפט שלם.</p>
+  <details class="card focused"><summary>🎯 תרגולים ממוקדים</summary><div class="btns" style="margin-top:10px">
+    ${buildable ? `<a class="btn secondary" href="#/quiz/${l.id}/build">🔤 כתיבה באותיות</a>` : ''}
     ${l.entries.some((e) => e.kind !== 'line') ? `<a class="btn secondary" href="#/quiz/${l.id}/listen">👂 הקשבה</a>` : ''}
-    ${l.entries.filter(canSentence).length >= 3 ? `<a class="btn secondary" href="#/quiz/${l.id}/sent">🧩 בניית משפטים</a>` : ''}
+    ${sentencesFor(l).length ? `<a class="btn secondary" href="#/quiz/${l.id}/sent">🧩 בניית משפטים</a><a class="btn secondary" href="#/quiz/${l.id}/write">⌨️ כתיבת משפט שלם</a>` : ''}
     ${l.cat === 'conj' && tensesUpTo(l).length ? `<a class="btn secondary" href="#/quiz/conj/${l.id}">🔁 הטיות פעלים</a>` : ''}
-  </div>`;
+  </div></details>`;
   if (isDialogue) {
     html += `<div class="card"><div class="row" style="margin-bottom:10px"><button class="btn secondary" id="playAll">▶ השמע את כל השיחה</button>
       <label class="small muted row" style="gap:6px"><input type="checkbox" class="switch" id="hideHe"> הסתר תרגום</label></div>
@@ -513,21 +516,130 @@ function dailyQuestions() {
     .map((e) => (e.kind === 'conj' ? { e, type: 'conjPick', tenses: (course.tenses || []).filter((t) => e.verb.forms[t.id]) } : makeQuestion(e)));
 }
 
-function makeQuestion(e, mode) {
+// ---- "which form fits the sentence?" (cloze): a verb or adjective in a sentence is blanked out ----
+let CLOZE_WORDS = null; // normalized word -> how to inflect it
+function clozeWords() {
+  if (CLOZE_WORDS) return CLOZE_WORDS;
+  CLOZE_WORDS = new Map();
+  for (const v of course.verbs || []) for (const tid of Object.keys(v.forms)) {
+    v.forms[tid].forEach(([ar], p) => { if (!ar.includes(' ') && !CLOZE_WORDS.has(normAr(ar))) CLOZE_WORDS.set(normAr(ar), { v, tid, p }); });
+  }
+  const bidd = ['بِدّي', 'بِدَّك', 'بِدِّك', 'بِدُّه', 'بِدّها', 'بِدّنا', 'بِدّكُم', 'بِدّهُم'];
+  for (const b of bidd) CLOZE_WORDS.set(normAr(b), { list: bidd });
+  for (const e of ENTRY.values()) {
+    if (e.kind !== 'word' || /\s/.test(e.ar.trim()) || CLOZE_WORDS.has(normAr(e.ar))) continue;
+    const w = stripHarakat(e.ar).replace(/[؟?!.،]/g, '');
+    const elative = /^ا[^ا]{3}$/.test(normAr(w)); // أكبَر, أحلى... don't inflect
+    if (['adj', 'feel'].includes(e.cat) && w.length >= 3 && !elative && !['كتير', 'شوي', 'شويه'].includes(normAr(w))) CLOZE_WORDS.set(normAr(w), { kind: 'adj' });
+    else if (['verb', 'conj'].includes(e.cat) && /^ب/.test(w) && w.length >= 4 && !/אות|אתכם/.test(e.he)) CLOZE_WORDS.set(normAr(w), { kind: 'verb' }); // not verb+object (بَحِبَّك)
+  }
+  return CLOZE_WORDS;
+}
+// other gender/number/person forms of a word, built from its prefix and suffix
+function inflections(word, kind) {
+  const w = stripHarakat(word);
+  const out = new Set();
+  if (kind === 'verb') {
+    const p = ['بي', 'بت', 'بن', 'ب'].find((x) => w.startsWith(x) && w.length - x.length >= 2);
+    let stem = w.slice(p.length);
+    const sf = ['ي', 'و'].find((x) => stem.endsWith(x) && stem.length >= 3) || '';
+    stem = stem.slice(0, stem.length - sf.length);
+    // verbs ending in a vowel (بَصحى, بَحكي) only change the prefix
+    const forms = /[ىاي]$/.test(stem) ? [['ب', ''], ['بت', ''], ['بي', ''], ['بن', '']]
+      : [['ب', ''], ['بت', ''], ['بت', 'ي'], ['بي', ''], ['بن', ''], ['بت', 'و'], ['بي', 'و']];
+    for (const [a, b] of forms) out.add(a + stem + b);
+  } else {
+    const sf = ['ين', 'ات', 'ة', 'ه'].find((x) => w.endsWith(x) && w.length - x.length >= 2) || '';
+    const stem = w.slice(0, w.length - sf.length);
+    for (const b of ['', 'ة', 'ين', 'ات']) out.add(stem + b);
+  }
+  return [...out].filter((x) => normAr(x) !== normAr(w));
+}
+function clozeSlots(e) {
+  if (e._cloze === undefined) {
+    const idx = clozeWords();
+    // past forms (نام, شاف...) look like other words, so only blank them in the past-tense unit
+    const fits = (info) => !info || info.tid !== 'past' || LESSONS.find((l) => l.id === course.tenses.find((t) => t.id === 'past')?.lesson)?.unit === e.lesson.unit;
+    e._cloze = canSentence(e) ? sentWords(e.ar).map((w, i) => (idx.has(normAr(w)) && fits(idx.get(normAr(w))) ? i : -1)).filter((i) => i >= 0) : [];
+  }
+  return e._cloze;
+}
+const canCloze = (e) => clozeSlots(e).length > 0;
+function makeCloze(e) {
+  const words = sentWords(e.ar);
+  const i = pick(clozeSlots(e));
+  const info = clozeWords().get(normAr(words[i]));
+  let correct = words[i], others;
+  if (info.v) {
+    others = info.v.forms[info.tid].map((f) => f[0]);
+  } else if (info.list) {
+    others = info.list;
+  } else {
+    correct = stripHarakat(correct);
+    others = inflections(correct, info.kind);
+  }
+  const options = [correct];
+  for (const o of shuffle(others)) if (options.length < 4 && !options.some((x) => normAr(x) === normAr(o))) options.push(o);
+  return { words, i, correct, options: shuffle(options) };
+}
+const LEVEL_TYPES = { easy: ['ar2he', 'listen', 'letterName'], mid: ['he2ar', 'listenAr', 'letterPick', 'letterForm', 'next'], build: ['build'] };
+function questionTypes(e) {
   const tts = Speech.available();
   let types;
   if (e.kind === 'letter') types = letterForms(e.ar) ? ['letterName', 'letterPick', 'letterForm'] : ['letterName', 'letterPick'];
-  else if (e.kind === 'line') types = ['ar2he', 'he2ar', 'next', tts && 'listen', canSentence(e) && 'sent'];
-  else types = ['ar2he', 'he2ar', tts && 'listen', tts && 'listenAr', canBuild(e) && 'build', canSentence(e) && 'sent'];
+  else if (e.kind === 'line') types = ['ar2he', 'he2ar', 'next', tts && 'listen', canSentence(e) && 'sent', canCloze(e) && 'cloze'];
+  else types = ['ar2he', 'he2ar', tts && 'listen', tts && 'listenAr', canBuild(e) && 'build', canSentence(e) && 'sent', canCloze(e) && 'cloze'];
   types = types.filter(Boolean);
   if (e.kind === 'line' && e.idx === 0) types = types.filter((t) => t !== 'next');
+  return types;
+}
+// sentences to practise in a lesson: its own, else sentences elsewhere that use its words
+function sentencesFor(l) {
+  const own = l.entries.filter(canSentence);
+  if (own.length >= 3) return own;
+  const words = new Set(l.entries.filter((e) => e.kind === 'word').map((e) => normAr(e.ar)));
+  const seenKeys = new Set(own.map((e) => e.id));
+  const more = LESSONS.flatMap((x) => x.entries).filter((x) => !seenKeys.has(x.id) && canSentence(x) && sentWords(x.ar).some((w) => words.has(normAr(w))) && seenKeys.add(x.id));
+  const unit = l.unit.lessons.flatMap((x) => x.entries).filter((x) => !seenKeys.has(x.id) && canSentence(x));
+  return [...own, ...shuffle(more), ...shuffle(unit)].slice(0, 12);
+}
+// the full lesson quiz goes from easy to hard: recognise → recall → spell → conjugate → fill the form → build → write a sentence
+function lessonQuiz(l) {
+  const weak = (x) => (P.items[x.id]?.b ?? 0);
+  const E = shuffle(l.entries).sort((a, b) => weak(a) - weak(b));
+  const stage = (level, k) => {
+    const out = [];
+    for (const e of [...E, ...shuffle(E)]) {
+      if (out.length >= k) break;
+      const t = questionTypes(e).filter((x) => LEVEL_TYPES[level].includes(x));
+      if (t.length) out.push({ e, type: pick(t) });
+    }
+    return out;
+  };
+  const S = sentencesFor(l);
+  const cloze = shuffle(S.filter(canCloze)).slice(0, 2).map((e) => ({ e, type: 'cloze' }));
+  const sent = shuffle(S).slice(0, 2).map((e) => ({ e, type: 'sent' }));
+  const short = S.filter((e) => sentWords(e.ar).length <= 5);
+  const write = (short.length ? [pick(short)] : S.slice(0, 1)).map((e) => ({ e, type: 'type' }));
+  const tenses = l.cat === 'conj' ? tensesUpTo(l) : [];
+  const conj = tenses.length ? conjQuestions(tenses, 3).sort((a, b) => (a.type === 'conjPick') - (b.type === 'conjPick')) : [];
+  const build = stage('build', 2);
+  const rest = cloze.length + sent.length + write.length + conj.length + build.length;
+  const fill = Math.max(0, 12 - rest - 8);
+  return [...stage('easy', 4 + Math.ceil(fill / 2)), ...stage('mid', 4 + Math.floor(fill / 2)), ...build, ...conj, ...cloze, ...sent, ...write];
+}
+
+function makeQuestion(e, mode) {
+  const tts = Speech.available();
+  let types = questionTypes(e);
   if (mode === 'build') types = canBuild(e) ? ['build'] : ['he2ar'];
-  if (mode === 'sent') types = canSentence(e) ? ['sent'] : ['he2ar'];
+  if (mode === 'sent') types = canSentence(e) ? ['sent', 'sent', canCloze(e) && 'cloze'].filter(Boolean) : ['he2ar'];
+  if (mode === 'write') types = canSentence(e) ? ['type'] : ['he2ar'];
   if (mode === 'listen') types = tts ? (e.kind === 'letter' ? ['letterPick'] : ['listen', 'listenAr']) : ['ar2he'];
   return { e, type: pick(types) };
 }
 function buildQuiz(entries, n, mode) {
-  let list = mode === 'build' ? entries.filter(canBuild) : mode === 'sent' ? entries.filter(canSentence) : entries.slice();
+  let list = mode === 'build' ? entries.filter(canBuild) : mode === 'sent' || mode === 'write' ? entries.filter(canSentence) : entries.slice();
   if (!list.length) list = entries.slice();
   // prioritise entries that are new or weak
   const weight = (x) => (P.items[x.id]?.b ?? 0);
@@ -541,7 +653,7 @@ function buildQuiz(entries, n, mode) {
 }
 
 function viewQuiz(id, mode) {
-  let entries = [], title, back, n = 12, lesson = null, extra = [];
+  let entries = [], title, back, n = 12, lesson = null, extra = [], ordered = null;
   if (id === 'conj' && !mode) return viewConjPicker();
   if (id === 'daily') {
     extra = dailyQuestions(); n = 0; title = 'תרגול טעויות יומי'; back = '#/review';
@@ -575,15 +687,15 @@ function viewQuiz(id, mode) {
     entries = lesson.entries; title = 'תרגול: ' + lesson.title; back = `#/lesson/${id}`;
     n = Math.min(14, Math.max(8, Math.round(entries.length * 1.2)));
     P.lessons[lesson.id] = P.lessons[lesson.id] || { best: 0 }; saveP();
-    // grammar lessons on verbs also drill the conjugations learned so far
-    if (lesson.cat === 'conj' && !mode) { const t = tensesUpTo(lesson); if (t.length) { extra = conjQuestions(t, 4); n = Math.max(6, n - 2); } }
+    if (!mode) ordered = lessonQuiz(lesson);
+    else if (mode === 'sent' || mode === 'write') entries = sentencesFor(lesson);
   }
   setHeader(title, back); setTab(['review', 'sent', 'daily'].includes(id) || (id === 'conj' && mode.startsWith('t:')) ? 'review' : id === 'dict' ? 'dict' : 'home');
   if (!entries.length && !extra.length) {
     $app.innerHTML = `<div class="empty">${id === 'daily' ? '🎉 אין טעויות שמחכות לתרגול. כל הכבוד!' : 'אין מה לתרגל כאן כרגע.'}</div>`;
     return;
   }
-  const qs = shuffle([...(entries.length && n ? buildQuiz(entries, n, mode === 'hard' || mode === 'mix' ? null : mode) : []), ...extra]);
+  const qs = ordered || shuffle([...(entries.length && n ? buildQuiz(entries, n, mode === 'hard' || mode === 'mix' ? null : mode) : []), ...extra]);
   let qi = 0, correct = 0;
   const mistakes = [];
   const next = () => {
@@ -701,6 +813,14 @@ function renderQuestion(q, qi, total, record, next) {
       prompt = `<div class="q">באיזה זמן?</div><div class="big-ar">${arSpan(e.ar)}</div>${playBtn(e.id)}<div class="muted small">${esc(PERSONS[e.p][0])} · ${esc(e.verb.he)}</div>`;
       label = (t) => t.title; isRight = (t) => t.id === e.tense.id; autoplay = true; break;
     }
+    case 'cloze': {
+      const c = q.cloze || (q.cloze = makeCloze(e));
+      const shown = c.words.map((w, i) => (i === c.i ? '<span class="blank">______</span>' : esc(arText(w)))).join(' ');
+      prompt = `<div class="q">איזו צורה מתאימה למשפט?</div><div style="font-size:19px;font-weight:600">${esc(e.he)}</div>
+        <div class="mid-ar ar" lang="ar" style="margin-top:6px">${shown}</div>`;
+      choices = c.options; label = (x) => x; choiceAr = true; isRight = (x) => x === c.correct; break;
+    }
+    case 'type': return renderType(q, top, record, next);
     case 'build': return renderBuild(q, top, record, next);
     case 'sent': return renderSentence(q, top, record, next);
   }
@@ -775,6 +895,31 @@ function renderBuild(q, top, record, next) {
   };
 }
 
+// hardest step: write the whole sentence (Arabic keyboard); small typos are forgiven
+function renderType(q, top, record, next) {
+  const { e } = q;
+  $app.innerHTML = `${top}<div class="card"><div class="prompt"><div class="q">כתוב/י את המשפט בערבית</div>
+    <div class="he-big">${esc(e.he)}</div>${hintTr(e.tr)}</div>
+    <textarea id="typed" class="ar type-box" lang="ar" dir="rtl" rows="2" placeholder="اكتب هنا..." autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+    <p class="small muted" style="margin:4px 0 10px">צריך מקלדת ערבית בטלפון (הגדרות ← מקלדת ← הוספת מקלדת ← ערבית). אין צורך בניקוד.</p>
+    <button class="btn block" id="check" disabled>בדיקה</button>
+    <div id="fb"></div></div>`;
+  const box = document.getElementById('typed');
+  const checkBtn = document.getElementById('check');
+  box.oninput = () => (checkBtn.disabled = !box.value.trim());
+  checkBtn.onclick = () => {
+    const said = box.value.trim();
+    const score = similarity(said, e.ar);
+    const ok = score >= 0.85;
+    box.disabled = true; checkBtn.disabled = true;
+    box.style.borderColor = ok ? 'var(--good)' : 'var(--bad)';
+    if (ENTRY.has(e.id)) grade(e.id, ok);
+    record(ok);
+    showFeedback(e, ok, next, true);
+    if (score < 1) document.querySelector('#fb .feedback').insertAdjacentHTML('afterbegin',
+      `<div class="small" style="margin-bottom:6px">${ok ? 'כמעט מושלם' : 'כתבת'}: <span class="ar">${esc(said)}</span> (${Math.round(score * 100)}% התאמה)</div>`);
+  };
+}
 function renderSentence(q, top, record, next) {
   const { e } = q;
   const target = sentWords(e.ar);
