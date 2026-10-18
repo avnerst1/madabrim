@@ -42,7 +42,10 @@ Transliteration convention: ח=ح, ח'=خ, ע=ع, ע'=غ, ת'=ث, ד'=ذ, צ=ص,
 - Quick dictionary: floating 🔎 button on every screen; Hebrew or Arabic search, verb infinitive shows a conjugation table.
 - "✨ הסבר עם Claude" (online only): without a key opens claude.ai/new?q=<prompt>; with an API key in settings calls claude-opus-5-5 (effort low, server-side fallback) via @anthropic-ai/sdk loaded from jsdelivr on demand; answers cached in localStorage `lingo:explain`.
 - Spaced repetition (Leitner boxes 0–7, `KNOWN_BOX` = 5). "המילים שלי" lists hard / learning / known, with manual mark known/unknown.
-- Progression: next lesson unlocks at ≥70% in practice; locked lessons can still be opened; setting to unlock all.
+- All lessons are open (user's choice); home still shows done (≥70%), started, score and known-% per lesson.
+- Daily mistakes drill (`#/quiz/daily`, Review tab + home button): every wrong answer is stored in `P.mistakes` until answered right there, so undone ones carry over to the next day.
+- Wrong conjugation answer shows the verb's full table for that tense; listening questions have "👁 הצג מה נאמר"; no pick-the-transliteration questions.
+- Speech uses a token so a delayed/stale utterance never plays over the current item.
 - Audio: browser speech synthesis (works offline when the phone has an Arabic voice installed). Online-only extras: pronunciation check via speech recognition (ar-JO), Google Translate link.
 - Progress in localStorage, per course (`lingo:progress:<courseId>`); backup/restore to a JSON file in settings.
 

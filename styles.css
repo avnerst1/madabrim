@@ -268,3 +268,5 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, .4); }
 .explain-out { white-space: pre-wrap; line-height: 1.7; }
 .explain-out .ar { font-size: 20px; }
 .mini-btn { min-height: 34px; padding: 4px 10px; font-size: 14px; }
+.conj-table tr.hl td { background: var(--good-soft); font-weight: 600; }
+.conj-table td[data-play] { cursor: pointer; }

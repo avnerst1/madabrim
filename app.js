@@ -3,7 +3,7 @@
    (generated from course.txt by tools/build-course.mjs). Progress lives in localStorage. */
 'use strict';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 const $app = document.getElementById('app');
 const $title = document.getElementById('title');
 const $back = document.getElementById('backBtn');
@@ -71,9 +71,22 @@ const Speech = {
     const want = settings.voiceURI;
     return this.voices.find((v) => v.voiceURI === want) || this.voices.find((v) => v.localService) || this.voices[0];
   },
+  token: 0,
   speak(text, opts = {}) {
     if (!('speechSynthesis' in window) || !text) { opts.onend?.(); return; }
-    if (!opts.queue) speechSynthesis.cancel();
+    if (opts.queue) return this.utter(text, opts);
+    // cancel() is asynchronous on some phones: an utterance queued right after it can be dropped, or an
+    // older one can play instead. Wait a moment and only speak if nothing newer was requested meanwhile.
+    const token = ++this.token;
+    speechSynthesis.cancel();
+    setTimeout(() => { if (token === this.token) this.utter(text, opts); }, 70);
+  },
+  // speak after a delay unless anything else was spoken or stopped in between (autoplay)
+  later(text, ms) {
+    const token = ++this.token;
+    setTimeout(() => { if (token === this.token) this.speak(text); }, ms);
+  },
+  utter(text, opts) {
     const u = new SpeechSynthesisUtterance(text);
     const v = this.voice();
     if (v) u.voice = v;
@@ -83,9 +96,10 @@ const Speech = {
     u.onerror = () => opts.onend?.();
     speechSynthesis.speak(u);
   },
-  stop() { if ('speechSynthesis' in window) speechSynthesis.cancel(); },
+  stop() { this.token++; if ('speechSynthesis' in window) speechSynthesis.cancel(); },
 };
-const speakEntry = (e, opts) => Speech.speak(e.kind === 'letter' ? (LETTER_NAMES[e.ar] || e.ar) : e.ar, opts);
+const spokenText = (e) => (e.kind === 'letter' ? (LETTER_NAMES[e.ar] || e.ar) : e.ar);
+const speakEntry = (e, opts) => Speech.speak(spokenText(e), opts);
 
 // online-only: pronunciation check with the browser's speech recognition
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -115,14 +129,14 @@ let courses = [];
 let course = null;
 let courseId = store.get('lingo:course', 'ar-he');
 const settings = Object.assign(
-  { rate: 0.85, voiceURI: '', autoplay: true, showTr: true, harakat: true, unlockAll: false, theme: 'auto', claudeKey: '' },
+  { rate: 0.85, voiceURI: '', autoplay: true, showTr: true, harakat: true, theme: 'auto', claudeKey: '' },
   store.get('lingo:settings', {}),
 );
 const saveSettings = () => store.set('lingo:settings', settings);
 let P = null; // progress of current course
 const progKey = () => `lingo:progress:${courseId}`;
 const saveP = () => store.set(progKey(), P);
-const loadP = () => { P = Object.assign({ items: {}, lessons: {}, days: {} }, store.get(progKey(), {})); };
+const loadP = () => { P = Object.assign({ items: {}, lessons: {}, days: {}, mistakes: {} }, store.get(progKey(), {})); };
 
 let LESSONS = [];         // flat list of lessons with unit ref
 const ENTRY = new Map();  // id -> entry
@@ -180,7 +194,6 @@ function streak() {
   return n;
 }
 const lessonDone = (l) => (P.lessons[l.id]?.best ?? 0) >= 70;
-const lessonUnlocked = (l) => settings.unlockAll || l.index === 0 || lessonDone(LESSONS[l.index - 1]) || !!P.lessons[l.id];
 const lessonKnownPct = (l) => {
   if (!l.entries.length) return 0;
   const k = l.entries.filter((e) => (P.items[e.id]?.b ?? 0) >= 3).length;
@@ -210,6 +223,8 @@ function bindPlay(root = $app) {
 }
 // transliteration kept hidden behind a button (used when the task is to produce the Arabic)
 const hintTr = (tr) => (tr ? `<button class="hint-btn" onclick="this.hidden=true;this.nextElementSibling.hidden=false">💡 הצג תעתיק</button><div class="tr" hidden>${esc(tr)}</div>` : '');
+// for listening questions when you can't play sound: show what is said
+const revealSaid = (html) => (html ? `<div><button class="hint-btn" onclick="this.hidden=true;this.nextElementSibling.hidden=false">👁 הצג מה נאמר</button><div hidden>${html}</div></div>` : '');
 const explainBtn = (e) => (isOnline() ? `<button class="btn ghost mini-btn" data-explain="${esc(e.id)}">✨ הסבר עם Claude</button>` : '');
 function renderTable(rows) {
   if (!rows?.length) return '';
@@ -241,28 +256,24 @@ function viewHome() {
   <div class="btns" style="margin-bottom:16px">
     ${nextLesson ? `<a class="btn" href="#/lesson/${nextLesson.id}">▶ להמשיך: ${esc(nextLesson.title)}</a>` : ''}
     <a class="btn secondary" href="#/review">🔁 חזרה (${due})</a>
+    ${mistakeList().length ? `<a class="btn secondary" href="#/quiz/daily">📅 טעויות לתרגול (${mistakeList().length})</a>` : ''}
   </div>`;
   for (const u of course.units) {
     const done = u.lessons.filter(lessonDone).length;
     html += `<section class="unit"><div class="unit-head"><h2>${esc(u.title)}</h2><span class="muted small">${done}/${u.lessons.length}</span></div>
       ${u.desc ? `<div class="muted small" style="margin:-6px 4px 8px">${esc(u.desc)}</div>` : ''}`;
     for (const l of u.lessons) {
-      const isDone = lessonDone(l), open = lessonUnlocked(l);
+      const isDone = lessonDone(l), rec = P.lessons[l.id];
       const pct = lessonKnownPct(l);
-      html += `<a class="lesson ${isDone ? 'done' : ''} ${open ? '' : 'locked'} ${l === nextLesson ? 'next' : ''}" href="#/lesson/${l.id}" data-lesson="${l.id}">
-        <span class="dot">${isDone ? '✓' : open ? l.index + 1 : '🔒'}</span>
-        <span class="grow"><h3>${esc(l.title)}</h3><span class="muted small">${l.entries.length} פריטים${P.lessons[l.id] ? ` · ציון ${P.lessons[l.id].best}%` : ''}</span>
+      html += `<a class="lesson ${isDone ? 'done' : ''} ${l === nextLesson ? 'next' : ''}" href="#/lesson/${l.id}" data-lesson="${l.id}">
+        <span class="dot">${isDone ? '✓' : l.index + 1}</span>
+        <span class="grow"><h3>${esc(l.title)}</h3><span class="muted small">${l.entries.length} פריטים${rec?.at ? ` · ציון ${rec.best}%` : rec ? ' · התחלתי' : ''}</span>
         <div class="bar"><i style="width:${pct}%"></i></div></span></a>`;
     }
     html += '</section>';
   }
   $app.innerHTML = html;
   $app.querySelectorAll('[data-course]').forEach((b) => (b.onclick = () => switchCourse(b.dataset.course)));
-  $app.querySelectorAll('a.lesson.locked').forEach((a) => {
-    a.onclick = (ev) => {
-      if (!confirm('השיעור הזה עוד נעול (קודם מסיימים את השיעור הקודם). לפתוח בכל זאת?')) ev.preventDefault();
-    };
-  });
 }
 
 function viewLesson(id) {
@@ -356,7 +367,7 @@ function viewLearn(id) {
     bindTrace();
     renderOnlineExtras(e, document.getElementById('online-extras'));
     if (!P.items[e.id]) { P.items[e.id] = { b: 0, d: now() + INTERVAL[1], c: 0, w: 0, t: now() }; saveP(); }
-    if (settings.autoplay) setTimeout(() => speakEntry(e), 250);
+    if (settings.autoplay) Speech.later(spokenText(e), 250); else Speech.stop();
     const go = (d) => { i += d; if (i >= l.entries.length) location.hash = `#/quiz/${l.id}`; else show(); };
     document.getElementById('prev').onclick = () => go(-1);
     document.getElementById('next').onclick = () => go(1);
@@ -448,9 +459,9 @@ function canSentence(e) {
   return n >= 3 && n <= 9;
 }
 function sentencePool() {
-  const reached = LESSONS.filter((l) => settings.unlockAll || P.lessons[l.id]);
+  const reached = LESSONS.filter((l) => P.lessons[l.id]);
   let list = reached.flatMap((l) => l.entries).filter(canSentence);
-  if (list.length < 5) list = LESSONS.filter(lessonUnlocked).flatMap((l) => l.entries).filter(canSentence);
+  if (list.length < 5) list = LESSONS.flatMap((l) => l.entries).filter(canSentence);
   return list;
 }
 
@@ -459,7 +470,7 @@ const PERSONS = [['אני', 'أنا'], ['אתה', 'إنتَ'], ['את', 'إنت�
 // tenses taught up to a lesson, or (no lesson) in lessons the learner has opened
 function tensesUpTo(lesson) {
   return (course.tenses || []).map((t) => ({ ...t, l: LESSONS.find((x) => x.id === t.lesson) }))
-    .filter((t) => t.l && (lesson ? t.l.index <= lesson.index : settings.unlockAll || P.lessons[t.l.id]));
+    .filter((t) => t.l && (lesson ? t.l.index <= lesson.index : P.lessons[t.l.id]));
 }
 function conjEntry(v, tense, p) {
   const [ar, tr] = v.forms[tense.id][p];
@@ -480,12 +491,34 @@ function conjQuestions(tenses, n) {
   return qs;
 }
 
+// ---- daily practice of mistakes: every wrong answer waits here until it is answered right in the daily drill ----
+const mistakeList = () => Object.entries(P.mistakes || {}).sort((a, b) => a[1].d.localeCompare(b[1].d));
+function addMistake(e) {
+  if (!ENTRY.has(e.id) && e.kind !== 'conj') return;
+  P.mistakes = P.mistakes || {};
+  const m = P.mistakes[e.id];
+  P.mistakes[e.id] = { d: m?.d || today(), n: (m?.n || 0) + 1 };
+  saveP();
+}
+function clearMistake(id) { if (P.mistakes?.[id]) { delete P.mistakes[id]; saveP(); } }
+function entryFromId(id) {
+  if (ENTRY.has(id)) return ENTRY.get(id);
+  const [, vid, tid, p] = id.split(':');
+  const v = (course.verbs || []).find((x) => x.id === vid);
+  const t = (course.tenses || []).find((x) => x.id === tid);
+  return v && t && v.forms[tid] ? conjEntry(v, t, +p) : null;
+}
+function dailyQuestions() {
+  return mistakeList().slice(0, 20).map(([id]) => entryFromId(id)).filter(Boolean)
+    .map((e) => (e.kind === 'conj' ? { e, type: 'conjPick', tenses: (course.tenses || []).filter((t) => e.verb.forms[t.id]) } : makeQuestion(e)));
+}
+
 function makeQuestion(e, mode) {
   const tts = Speech.available();
   let types;
   if (e.kind === 'letter') types = letterForms(e.ar) ? ['letterName', 'letterPick', 'letterForm'] : ['letterName', 'letterPick'];
   else if (e.kind === 'line') types = ['ar2he', 'he2ar', 'next', tts && 'listen', canSentence(e) && 'sent'];
-  else types = ['ar2he', 'he2ar', 'read', tts && 'listen', tts && 'listenAr', canBuild(e) && 'build', canSentence(e) && 'sent'];
+  else types = ['ar2he', 'he2ar', tts && 'listen', tts && 'listenAr', canBuild(e) && 'build', canSentence(e) && 'sent'];
   types = types.filter(Boolean);
   if (e.kind === 'line' && e.idx === 0) types = types.filter((t) => t !== 'next');
   if (mode === 'build') types = canBuild(e) ? ['build'] : ['he2ar'];
@@ -509,16 +542,19 @@ function buildQuiz(entries, n, mode) {
 
 function viewQuiz(id, mode) {
   let entries = [], title, back, n = 12, lesson = null, extra = [];
-  if (id === 'conj') {
-    const upTo = mode ? LESSONS.find((x) => x.id === mode) : null;
-    const tenses = tensesUpTo(upTo);
+  if (id === 'conj' && !mode) return viewConjPicker();
+  if (id === 'daily') {
+    extra = dailyQuestions(); n = 0; title = 'תרגול טעויות יומי'; back = '#/review';
+  } else if (id === 'conj') {
+    const upTo = mode.startsWith('t:') ? null : LESSONS.find((x) => x.id === mode);
+    const tenses = upTo ? tensesUpTo(upTo) : (course.tenses || []).filter((t) => mode.slice(2).split(',').includes(t.id));
     setHeader('תרגול הטיות פעלים', upTo ? `#/lesson/${upTo.id}` : '#/review'); setTab(upTo ? 'home' : 'review');
     if (!tenses.length) {
       const first = LESSONS.find((l) => l.id === course.tenses?.[0]?.lesson);
       $app.innerHTML = `<div class="empty">תרגול ההטיות נפתח כשמגיעים לשיעור על נטיית הפועל בהווה.${first ? `<br><br><a class="btn" href="#/lesson/${first.id}">לשיעור: ${esc(first.title)}</a>` : ''}</div>`;
       return;
     }
-    title = 'תרגול הטיות פעלים'; back = upTo ? `#/lesson/${upTo.id}` : '#/review';
+    title = 'תרגול הטיות פעלים'; back = upTo ? `#/lesson/${upTo.id}` : '#/quiz/conj';
     extra = conjQuestions(tenses, 12); n = 0;
   } else if (id === 'sent') {
     entries = sentencePool(); title = 'בניית משפטים'; back = '#/review'; n = 10; mode = 'sent';
@@ -542,15 +578,19 @@ function viewQuiz(id, mode) {
     // grammar lessons on verbs also drill the conjugations learned so far
     if (lesson.cat === 'conj' && !mode) { const t = tensesUpTo(lesson); if (t.length) { extra = conjQuestions(t, 4); n = Math.max(6, n - 2); } }
   }
-  setHeader(title, back); setTab(id === 'review' || id === 'sent' || (id === 'conj' && !mode) ? 'review' : id === 'dict' ? 'dict' : 'home');
-  if (!entries.length && !extra.length) { $app.innerHTML = `<div class="empty">אין מה לתרגל כאן כרגע.</div>`; return; }
+  setHeader(title, back); setTab(['review', 'sent', 'daily'].includes(id) || (id === 'conj' && mode.startsWith('t:')) ? 'review' : id === 'dict' ? 'dict' : 'home');
+  if (!entries.length && !extra.length) {
+    $app.innerHTML = `<div class="empty">${id === 'daily' ? '🎉 אין טעויות שמחכות לתרגול. כל הכבוד!' : 'אין מה לתרגל כאן כרגע.'}</div>`;
+    return;
+  }
   const qs = shuffle([...(entries.length && n ? buildQuiz(entries, n, mode === 'hard' || mode === 'mix' ? null : mode) : []), ...extra]);
   let qi = 0, correct = 0;
   const mistakes = [];
   const next = () => {
     if (qi >= qs.length) return finish();
     renderQuestion(qs[qi], qi, qs.length, (ok) => {
-      if (ok) correct++; else mistakes.push(qs[qi].e);
+      const e = qs[qi].e;
+      if (ok) { correct++; if (id === 'daily') clearMistake(e.id); } else { mistakes.push(e); addMistake(e); }
       qi++;
     }, next);
   };
@@ -564,7 +604,8 @@ function viewQuiz(id, mode) {
     const uniqueMistakes = [...new Map(mistakes.map((m) => [m.id, m])).values()];
     $app.innerHTML = `<div class="card center"><div class="celebrate">${pct >= 90 ? '🏆' : pct >= 70 ? '🎉' : '💪'}</div>
       <h2>${pct}% נכון (${correct}/${qs.length})</h2>
-      <p class="muted">${pct >= 70 ? (lesson ? 'השיעור עבר! המילים נכנסו לחזרות.' : 'כל הכבוד!') : 'כדאי לתרגל שוב, זה מתקבע עם חזרות.'}</p></div>
+      <p class="muted">${pct >= 70 ? (lesson ? 'השיעור עבר! המילים נכנסו לחזרות.' : 'כל הכבוד!') : 'כדאי לתרגל שוב, זה מתקבע עם חזרות.'}</p>
+      ${id === 'daily' ? `<p class="small">${mistakeList().length ? `נשארו ${mistakeList().length} לתרגל. הן יחכו לך גם מחר.` : 'סיימת את כל הטעויות 🎉'}</p>` : mistakes.length ? '<p class="small muted">הטעויות נשמרו לתרגול היומי (בכרטיסיית "חזרה").</p>' : ''}</div>
       ${uniqueMistakes.length ? `<div class="card"><h3>לחזור על אלה</h3>${uniqueMistakes.map((e) => entryRow(e)).join('')}</div>` : ''}
       <div class="btns">
         <button class="btn secondary" id="again">🔁 שוב</button>
@@ -574,6 +615,26 @@ function viewQuiz(id, mode) {
     document.getElementById('again').onclick = () => viewQuiz(id, mode);
   };
   next();
+}
+
+function viewConjPicker() {
+  setHeader('תרגול הטיות פעלים', '#/review'); setTab('review');
+  const all = course.tenses || [];
+  const learned = tensesUpTo().map((t) => t.id);
+  let chosen = new Set(store.get('lingo:conjTenses', null) || (learned.length ? learned : all.slice(0, 1).map((t) => t.id)));
+  const render = () => {
+    $app.innerHTML = `<div class="card"><h3>אילו זמנים לתרגל?</h3>
+      <p class="small muted">מסומנים הזמנים מהשיעורים שכבר פתחת. אפשר לבחור כל שילוב.</p>
+      ${all.map((t) => `<label class="field"><span>${esc(t.title)}${learned.includes(t.id) ? '' : ' <span class="muted small">(עוד לא נלמד)</span>'}</span>
+        <input type="checkbox" class="switch" data-t="${t.id}" ${chosen.has(t.id) ? 'checked' : ''}></label>`).join('')}
+      <button class="btn block" id="go" style="margin-top:12px" ${chosen.size ? '' : 'disabled'}>▶ להתחיל</button></div>`;
+    $app.querySelectorAll('[data-t]').forEach((c) => (c.onchange = () => {
+      if (c.checked) chosen.add(c.dataset.t); else chosen.delete(c.dataset.t);
+      store.set('lingo:conjTenses', [...chosen]); render();
+    }));
+    document.getElementById('go').onclick = () => { location.hash = '#/quiz/conj/t:' + [...chosen].join(','); };
+  };
+  render();
 }
 
 function renderQuestion(q, qi, total, record, next) {
@@ -592,10 +653,10 @@ function renderQuestion(q, qi, total, record, next) {
       prompt = `<div class="q">קריאה: איך קוראים את זה?</div><div class="big-ar">${arSpan(e.ar)}</div>`;
       label = (x) => x.tr; choices = choicesFor(e, label); break;
     case 'listen':
-      prompt = `<div class="q">הקשב/י – מה שמעת?</div>${playBtn(e.id, 'lg')}`;
+      prompt = `<div class="q">הקשב/י – מה שמעת?</div>${playBtn(e.id, 'lg')}${revealSaid(`${arSpan(e.ar, 'mid-ar')}${e.tr ? `<div class="tr">${esc(e.tr)}</div>` : ''}`)}`;
       label = (x) => x.he; choices = choicesFor(e, label); autoplay = true; break;
     case 'listenAr':
-      prompt = `<div class="q">הקשב/י – איזו מילה שמעת?</div>${playBtn(e.id, 'lg')}`;
+      prompt = `<div class="q">הקשב/י – איזו מילה שמעת?</div>${playBtn(e.id, 'lg')}${revealSaid(e.tr ? `<div class="tr" style="font-size:20px">${esc(e.tr)}</div>` : '')}`;
       label = (x) => x.ar; choices = choicesFor(e, label); choiceAr = true; autoplay = true; break;
     case 'next': {
       const prev = e.lesson.lines[e.idx - 1];
@@ -647,7 +708,7 @@ function renderQuestion(q, qi, total, record, next) {
     <div class="choices">${choices.map((c, i) => `<button class="choice ${choiceAr ? 'ar' : ''}" data-i="${i}" ${choiceAr ? 'lang="ar"' : ''}>${esc(choiceAr ? arText(label(c)) : label(c))}</button>`).join('')}</div>
     <div id="fb"></div></div>`;
   bindPlay();
-  if (autoplay) setTimeout(() => speakEntry(e), 200);
+  if (autoplay) Speech.later(spokenText(e), 200); else Speech.stop();
   const buttons = [...$app.querySelectorAll('.choice')];
   buttons.forEach((b) => (b.onclick = () => {
     const ok = isRight(choices[+b.dataset.i]);
@@ -658,11 +719,19 @@ function renderQuestion(q, qi, total, record, next) {
     showFeedback(e, ok, next, !['ar2he', 'listen', 'letterPick', 'listenAr', 'conjWho', 'conjTense'].includes(type));
   }));
 }
+// after a wrong conjugation answer: the whole tense of that verb, the asked person highlighted
+function conjFeedbackTable(e) {
+  const forms = e.verb.forms[e.tense.id];
+  return `<div style="margin-top:10px"><div class="small"><b>${esc(e.verb.he)} · ${esc(e.tense.title)}</b></div>
+    <table class="grid conj-table">${PERSONS.map((p, i) => `<tr class="${forms[i][0] === e.ar ? 'hl' : ''}"><td>${esc(p[0])} ${arSpan(p[1])}</td>
+      <td data-play="${esc(forms[i][0])}">${arSpan(forms[i][0])}</td><td class="tr small">${esc(forms[i][1])}</td></tr>`).join('')}</table></div>`;
+}
 function showFeedback(e, ok, next, speakNow) {
   const fb = document.getElementById('fb');
   fb.innerHTML = `<div class="feedback ${ok ? 'good' : 'bad'}">
     <div class="row"><b class="grow">${ok ? '✓ נכון!' : '✗ לא בדיוק'}</b>${playBtn(e.id)}</div>
     <div>${arSpan(e.ar, 'mid-ar')}</div>${e.tr ? `<div class="tr">${esc(e.tr)}</div>` : ''}<div>${esc(e.he)}</div>
+    ${!ok && e.kind === 'conj' ? conjFeedbackTable(e) : ''}
     ${e.kind !== 'letter' ? `<div style="margin-top:6px">${explainBtn(e)}</div>` : ''}</div>
     <button class="btn block" style="margin-top:12px" id="nextQ">המשך ←</button>`;
   bindPlay(fb);
@@ -759,6 +828,8 @@ function viewReview() {
   const seen = [...ENTRY.values()].filter((e) => P.items[e.id]);
   const nextDue = Math.min(...seen.map((e) => P.items[e.id].d).filter((d) => d > now()));
   const tenses = tensesUpTo();
+  const ml = mistakeList();
+  const fromToday = ml.filter(([, m]) => m.d === today()).length;
   const when = isFinite(nextDue) ? new Date(nextDue).toLocaleString('he-IL', { weekday: 'long', hour: '2-digit', minute: '2-digit' }) : null;
   $app.innerHTML = `<div class="card center">
       <div class="celebrate">${due.length ? '🔁' : '✅'}</div>
@@ -770,8 +841,12 @@ function viewReview() {
       <a class="btn secondary ${hard.length ? '' : 'disabled'}" href="${hard.length ? '#/quiz/review/hard' : '#/review'}">😬 המילים הקשות (${hard.length})</a>
       <a class="btn secondary" href="${seen.length ? '#/quiz/review/mix' : '#/review'}">🎲 תרגול מעורב (${seen.length})</a>
     </div>
-    <div class="card" style="margin-top:12px"><h3>תרגולים נוספים</h3>
-      <p class="small muted" style="margin:0 0 8px">${tenses.length ? `הטיות לפי מה שלמדת: ${tenses.map((t) => esc(t.title)).join(', ')}` : 'הטיות הפעלים נפתחות בשיעור על נטיית הפועל בהווה.'}</p>
+    <div class="card" style="margin-top:12px"><h3>📅 סיכום יום: תרגול הטעויות</h3>
+      <p class="small muted" style="margin:0 0 8px">${ml.length ? `${ml.length} טעויות מחכות (${fromToday} מהיום${ml.length - fromToday ? `, ${ml.length - fromToday} מימים קודמים` : ''}). מה שלא תתרגל עובר למחר, וכל טעות יורדת מהרשימה כשעונים עליה נכון.` : 'אין טעויות שמחכות 🎉 כל טעות בתרגולים תופיע כאן.'}</p>
+      ${ml.length ? `<a class="btn block" href="#/quiz/daily">▶ לתרגל את הטעויות (${Math.min(20, ml.length)})</a>` : ''}
+    </div>
+    <div class="card"><h3>תרגולים נוספים</h3>
+      <p class="small muted" style="margin:0 0 8px">${tenses.length ? `הטיות לפי מה שלמדת: ${tenses.map((t) => esc(t.title)).join(', ')}. אפשר לבחור גם זמנים אחרים.` : 'אפשר לבחור אילו זמנים לתרגל.'}</p>
       <div class="btns"><a class="btn secondary" href="#/quiz/conj">🔁 הטיות פעלים</a><a class="btn secondary" href="#/quiz/sent">🧩 בניית משפטים</a></div>
     </div>
     ${!seen.length ? `<div class="empty">עוד לא למדת מילים. התחל מהשיעור הראשון 🙂<br><br><a class="btn" href="#/">לשיעורים</a></div>` : ''}`;
@@ -1031,7 +1106,7 @@ function viewLetters(ch) {
         $app.innerHTML = `<div class="card center"><div class="celebrate">🔤</div><h2>${correct}/${qs.length}</h2><a class="btn" href="#/letters">חזרה לאותיות</a></div>`;
         return;
       }
-      renderQuestion(qs[qi], qi, qs.length, (ok) => { if (ok) correct++; qi++; }, next);
+      renderQuestion(qs[qi], qi, qs.length, (ok) => { if (ok) correct++; else addMistake(qs[qi].e); qi++; }, next);
     };
     next();
   };
@@ -1057,7 +1132,6 @@ function viewSettings() {
   <div class="card"><h3>📖 תצוגה</h3>
     <div class="field"><span>להציג תעתיק בעברית</span><input type="checkbox" class="switch" id="showTr" ${settings.showTr ? 'checked' : ''}></div>
     <div class="field"><span>להציג ניקוד (حَرَكات)</span><input type="checkbox" class="switch" id="harakat" ${settings.harakat ? 'checked' : ''}></div>
-    <div class="field"><span>לפתוח את כל השיעורים</span><input type="checkbox" class="switch" id="unlockAll" ${settings.unlockAll ? 'checked' : ''}></div>
     <div class="field"><span>ערכת צבעים</span><select id="theme"><option value="auto">לפי המכשיר</option><option value="light" ${settings.theme === 'light' ? 'selected' : ''}>בהיר</option><option value="dark" ${settings.theme === 'dark' ? 'selected' : ''}>כהה</option></select></div>
   </div>
   <div class="card"><h3>📲 התקנה ועבודה בלי אינטרנט</h3>
@@ -1082,7 +1156,7 @@ function viewSettings() {
   on('voice', 'onchange', (ev) => { settings.voiceURI = ev.target.value; saveSettings(); Speech.speak('مَرحَبا'); });
   on('rate', 'onchange', (ev) => { settings.rate = +ev.target.value; saveSettings(); Speech.speak('كيف حالَك؟'); });
   on('testVoice', 'onclick', () => Speech.speak('مَرحَبا، كيف حالَك؟'));
-  for (const k of ['autoplay', 'showTr', 'harakat', 'unlockAll']) on(k, 'onchange', (ev) => { settings[k] = ev.target.checked; saveSettings(); });
+  for (const k of ['autoplay', 'showTr', 'harakat']) on(k, 'onchange', (ev) => { settings[k] = ev.target.checked; saveSettings(); });
   on('claudeKey', 'onchange', (ev) => { settings.claudeKey = ev.target.value.trim(); saveSettings(); showBanner(settings.claudeKey ? 'המפתח נשמר ✓' : 'המפתח נמחק', null, 2500); });
   on('theme', 'onchange', (ev) => { settings.theme = ev.target.value; saveSettings(); applyTheme(); });
   on('checkUpdate', 'onclick', async () => {
@@ -1105,7 +1179,7 @@ function viewSettings() {
     } catch { alert('הקובץ לא תקין'); }
   });
   on('reset', 'onclick', () => {
-    if (confirm('למחוק את כל ההתקדמות בקורס הזה?')) { P = { items: {}, lessons: {}, days: {} }; saveP(); route(); }
+    if (confirm('למחוק את כל ההתקדמות בקורס הזה?')) { P = { items: {}, lessons: {}, days: {}, mistakes: {} }; saveP(); route(); }
   });
 }
 
