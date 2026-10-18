@@ -3,7 +3,7 @@
    (generated from course.txt by tools/build-course.mjs). Progress lives in localStorage. */
 'use strict';
 
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.4.2';
 const $app = document.getElementById('app');
 const $title = document.getElementById('title');
 const $back = document.getElementById('backBtn');
@@ -728,17 +728,18 @@ function conjFeedbackTable(e) {
 }
 function showFeedback(e, ok, next, speakNow) {
   const fb = document.getElementById('fb');
-  fb.innerHTML = `<div class="feedback ${ok ? 'good' : 'bad'}">
+  // "continue" sits above the explanation so it is reachable without scrolling
+  fb.innerHTML = `<button class="btn block" style="margin-top:14px" id="nextQ">המשך ←</button>
+    <div class="feedback ${ok ? 'good' : 'bad'}" style="margin-top:10px">
     <div class="row"><b class="grow">${ok ? '✓ נכון!' : '✗ לא בדיוק'}</b>${playBtn(e.id)}</div>
     <div>${arSpan(e.ar, 'mid-ar')}</div>${e.tr ? `<div class="tr">${esc(e.tr)}</div>` : ''}<div>${esc(e.he)}</div>
     ${!ok && e.kind === 'conj' ? conjFeedbackTable(e) : ''}
-    ${e.kind !== 'letter' ? `<div style="margin-top:6px">${explainBtn(e)}</div>` : ''}</div>
-    <button class="btn block" style="margin-top:12px" id="nextQ">המשך ←</button>`;
+    ${e.kind !== 'letter' ? `<div style="margin-top:6px">${explainBtn(e)}</div>` : ''}</div>`;
   bindPlay(fb);
   if (speakNow || !ok) speakEntry(e);
   const btn = document.getElementById('nextQ');
   btn.focus({ preventScroll: true });
-  fb.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  btn.scrollIntoView({ block: 'center', behavior: 'smooth' });
   btn.onclick = () => { Speech.stop(); next(); };
 }
 function renderBuild(q, top, record, next) {
