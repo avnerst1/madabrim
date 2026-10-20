@@ -3,7 +3,7 @@
    (generated from course.txt by tools/build-course.mjs). Progress lives in localStorage. */
 'use strict';
 
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.5.2';
 const $app = document.getElementById('app');
 const $title = document.getElementById('title');
 const $back = document.getElementById('backBtn');
@@ -1185,17 +1185,18 @@ function openExplain(prompt, key) {
   const dlg = document.getElementById('ex');
   const out = document.getElementById('exOut');
   const link = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
+  const gpt = `<a class="btn ghost block" style="margin-top:8px" target="_blank" rel="noopener" href="https://chatgpt.com/?q=${encodeURIComponent(prompt)}">💬 לשאול את ChatGPT ↗</a>`;
   const cache = store.get('lingo:explain', {});
   const show = (text) => {
     out.innerHTML = `<div class="explain-out">${miniMd(text)}</div><p class="small muted" style="margin-top:12px">ההסבר נשמר ויופיע גם בלי אינטרנט. Claude יכול לטעות, אז כדאי לבדוק מול המורה במקרה של ספק.</p>
-      <a class="btn ghost block" target="_blank" rel="noopener" href="${link}">להמשיך לשאול ב-Claude ↗</a>`;
+      <a class="btn ghost block" target="_blank" rel="noopener" href="${link}">להמשיך לשאול ב-Claude ↗</a>${gpt}`;
   };
   if (!dlg.open) dlg.showModal();
   if (cache[key]) return show(cache[key]);
   if (!isOnline()) { out.innerHTML = '<div class="empty">ההסבר עובד רק עם אינטרנט.</div>'; return; }
   if (!settings.claudeKey) {
     out.innerHTML = `<p>אפשר לקבל הסבר שמפרק את הביטוי למילים עם המשמעות המילולית של כל אחת. השאלה כבר כתובה, רק צריך להיות מחובר ל-Claude:</p>
-      <a class="btn block" target="_blank" rel="noopener" href="${link}">✨ פתח את השאלה ב-Claude ↗</a>
+      <a class="btn block" target="_blank" rel="noopener" href="${link}">✨ פתח את השאלה ב-Claude ↗</a>${gpt}
       <p class="small muted" style="margin-top:12px">רוצה שההסבר יופיע כאן באפליקציה? אפשר להוסיף מפתח API של Claude בהגדרות (חיוב לפי שימוש, כמה אגורות להסבר).</p>`;
     return;
   }
@@ -1209,7 +1210,7 @@ function openExplain(prompt, key) {
     if (dlg.open) show(text);
   }).catch((err) => {
     out.innerHTML = `<div class="empty">לא הצלחתי לקבל הסבר (${esc(err.message || err)}).<br>אולי המפתח לא תקין או שאין חיבור.</div>
-      <a class="btn ghost block" target="_blank" rel="noopener" href="${link}">פתח את השאלה ב-Claude ↗</a>`;
+      <a class="btn ghost block" target="_blank" rel="noopener" href="${link}">פתח את השאלה ב-Claude ↗</a>${gpt}`;
   });
 }
 
