@@ -3,7 +3,7 @@
    (generated from course.txt by tools/build-course.mjs). Progress lives in localStorage. */
 'use strict';
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 const $app = document.getElementById('app');
 const $title = document.getElementById('title');
 const $back = document.getElementById('backBtn');
@@ -828,7 +828,7 @@ function renderQuestion(q, qi, total, record, next) {
     <div class="choices">${choices.map((c, i) => `<button class="choice ${choiceAr ? 'ar' : ''}" data-i="${i}" ${choiceAr ? 'lang="ar"' : ''}>${esc(choiceAr ? arText(label(c)) : label(c))}</button>`).join('')}</div>
     <div id="fb"></div></div>`;
   bindPlay();
-  if (autoplay) Speech.later(spokenText(e), 200); else Speech.stop();
+  if (autoplay && settings.autoplay) Speech.later(spokenText(e), 200); else Speech.stop();
   const buttons = [...$app.querySelectorAll('.choice')];
   buttons.forEach((b) => (b.onclick = () => {
     const ok = isRight(choices[+b.dataset.i]);
@@ -856,7 +856,7 @@ function showFeedback(e, ok, next, speakNow) {
     ${!ok && e.kind === 'conj' ? conjFeedbackTable(e) : ''}
     ${e.kind !== 'letter' ? `<div style="margin-top:6px">${explainBtn(e)}</div>` : ''}</div>`;
   bindPlay(fb);
-  if (speakNow || !ok) speakEntry(e);
+  if (settings.autoplay && (speakNow || !ok)) speakEntry(e);
   const btn = document.getElementById('nextQ');
   btn.focus({ preventScroll: true });
   btn.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -1271,7 +1271,7 @@ function viewSettings() {
     ${voices.length ? `<div class="field"><span>קול</span><select id="voice"><option value="">אוטומטי</option>${voices.map((v) => `<option value="${esc(v.voiceURI)}" ${v.voiceURI === settings.voiceURI ? 'selected' : ''}>${esc(v.name)} (${esc(v.lang)})${v.localService ? '' : ' · אונליין'}</option>`).join('')}</select></div>`
       : `<p class="small" style="color:var(--bad)">לא נמצא קול ערבי במכשיר. ${ios ? 'באייפון: הגדרות ← נגישות ← תוכן מוקרא ← קולות ← ערבית, והורד קול.' : 'באנדרואיד: הגדרות ← נגישות/שפה ← המרת טקסט לדיבור ← Google ← התקנת נתוני קול ← ערבית.'} אחרי ההורדה הקול עובד גם בלי אינטרנט.</p>`}
     <div class="field"><span>מהירות</span><input type="range" id="rate" min="0.5" max="1.2" step="0.05" value="${settings.rate}"></div>
-    <div class="field"><span>השמעה אוטומטית</span><input type="checkbox" class="switch" id="autoplay" ${settings.autoplay ? 'checked' : ''}></div>
+    <div class="field"><span>השמעה אוטומטית (כבוי = רק בלחיצה על 🔊)</span><input type="checkbox" class="switch" id="autoplay" ${settings.autoplay ? 'checked' : ''}></div>
     <button class="btn secondary block" id="testVoice">▶ בדיקת קול: مَرحَبا، كيف حالَك؟</button>
     <p class="small muted" style="margin:8px 0 0">הקול של הטלפון מבטא ערבית סטנדרטית, אז לפעמים ההגייה תהיה "רשמית" יותר מהמדוברת. התעתיק בעברית מראה את ההגייה המדוברת.</p>
   </div>
