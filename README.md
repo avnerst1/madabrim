@@ -26,6 +26,8 @@ X present|want|future|progressive|past   (this lesson unlocks that tense in the 
 @verb id | Hebrew infinitive      (verb paradigm, anywhere; followed by:)
 VS ar ~ tr | ... (8 cells)        bare/subjunctive forms: أنا إنتَ إنتِ هو هي إحنا إنتو هُمّ
 VP ar ~ tr | ... (8 cells)        past forms
+@adj id | Hebrew (masculine)      (adjective, anywhere; followed by:)
+VA ar ~ tr | ar ~ tr | ar ~ tr   masculine | feminine | plural
 ```
 Present (بـ), رَح, عَم and بِدّي forms are derived from VS by tools/build-course.mjs.
 `key` is the stable id used for progress tracking: never rename keys of existing items. Reusing a key for the same Arabic text shares progress; the build fails if a key is reused for different text.
@@ -37,7 +39,7 @@ Transliteration convention: ח=ح, ח'=خ, ע=ع, ע'=غ, ת'=ث, ד'=ذ, צ=ص,
 - Dictionary tab: every word grouped by topic (`@category` list, lesson default `= cat`, per-key overrides `C cat: key, key` at the end of course.txt), with conjugation tables, search and a quiz per topic.
 - Lesson: learn (flashcards), and "תרגול מלא" (`lessonQuiz`), ordered easy→hard: recognise (ar→he, listen) → recall (he→ar) → spell with letter tiles → conjugations (conj lessons) → cloze "which form fits the sentence" → sentence building → typing a whole sentence (similarity ≥ 0.85). Sentences come from the lesson, else from sentences using its words (`sentencesFor`). Focused drills sit in a collapsed "תרגולים ממוקדים" box.
 - Cloze distractors: verb paradigms (past only inside the past unit), بِدّي forms, or generated gender/number/person forms of adjectives and ب-verbs (`inflections`).
-- Conjugation drills (`#/quiz/conj`, Review tab, conj lessons): pick the right form for a person/tense, who does it, which tense; only tenses from lessons already opened. 14 verb paradigms.
+- Conjugation drills (`#/quiz/conj`, Review tab, conj lessons): pick the right form for a person/tense, who does it, which tense; tenses default to lessons already opened. 32 verb paradigms. Adjective drill ("תארים: זכר / נקבה / רבים", `t:adj`): pick the form for a subject or name the form, 24 adjectives; also mixed into adj/feel lesson quizzes and any lesson using those adjectives, and their forms feed the cloze questions.
 - Sentence building (`#/quiz/sent`, lesson button, mixed into quizzes): order word tiles with distractors.
 - Hebrew→Arabic prompts hide the transliteration behind a "💡 הצג תעתיק" button.
 - Quick dictionary: floating 🔎 button on every screen; Hebrew or Arabic search, verb infinitive shows a conjugation table.

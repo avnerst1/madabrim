@@ -1,7 +1,7 @@
 // Service worker: app shell is cache-first, course content is network-first
 // (so new lessons arrive when online and the cached copy is used offline).
 // Bump VERSION whenever app files change so phones pick up the new shell.
-const VERSION = 'madabrim-v10';
+const VERSION = 'madabrim-v11';
 const SHELL = [
   './',
   'index.html',

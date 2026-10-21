@@ -3,7 +3,7 @@
    (generated from course.txt by tools/build-course.mjs). Progress lives in localStorage. */
 'use strict';
 
-const APP_VERSION = '1.5.2';
+const APP_VERSION = '1.6.0';
 const $app = document.getElementById('app');
 const $title = document.getElementById('title');
 const $back = document.getElementById('backBtn');
@@ -287,12 +287,13 @@ function viewLesson(id) {
     <a class="btn" href="#/learn/${l.id}">📖 ללמוד</a>
     <a class="btn" href="#/quiz/${l.id}">✏️ תרגול מלא</a>
   </div>
-  <p class="small muted" style="margin:6px 4px 8px">התרגול המלא מתחיל קל (לזהות ולבחור מילים), ממשיך לכתיבה באותיות${l.cat === 'conj' ? ' ולהטיות' : ''}, ונגמר בבניית משפטים וכתיבת משפט שלם.</p>
+  <p class="small muted" style="margin:6px 4px 8px">התרגול המלא מתחיל קל (לזהות ולבחור מילים), ממשיך לכתיבה באותיות${l.cat === 'conj' || ['adj', 'feel'].includes(l.cat) || lessonAdjs(l).length ? ' ולהטיות' : ''}, ונגמר בבניית משפטים וכתיבת משפט שלם.</p>
   <details class="card focused"><summary>🎯 תרגולים ממוקדים</summary><div class="btns" style="margin-top:10px">
     ${buildable ? `<a class="btn secondary" href="#/quiz/${l.id}/build">🔤 כתיבה באותיות</a>` : ''}
     ${l.entries.some((e) => e.kind !== 'line') ? `<a class="btn secondary" href="#/quiz/${l.id}/listen">👂 הקשבה</a>` : ''}
     ${sentencesFor(l).length ? `<a class="btn secondary" href="#/quiz/${l.id}/sent">🧩 בניית משפטים</a><a class="btn secondary" href="#/quiz/${l.id}/write">⌨️ כתיבת משפט שלם</a>` : ''}
     ${l.cat === 'conj' && tensesUpTo(l).length ? `<a class="btn secondary" href="#/quiz/conj/${l.id}">🔁 הטיות פעלים</a>` : ''}
+    ${['adj', 'feel'].includes(l.cat) && (course.adjs || []).length ? `<a class="btn secondary" href="#/quiz/conj/t:adj">🔁 תארים: זכר/נקבה/רבים</a>` : ''}
   </div></details>`;
   if (isDialogue) {
     html += `<div class="card"><div class="row" style="margin-bottom:10px"><button class="btn secondary" id="playAll">▶ השמע את כל השיחה</button>
@@ -493,11 +494,33 @@ function conjQuestions(tenses, n) {
   }
   return qs;
 }
+// ---- adjective drills: masculine / feminine / plural (course.adjs) ----
+const ADJ_FORM = ['זכר', 'נקבה', 'רבים'];
+const ADJ_SUBJ = { 1: 0, 2: 1, 3: 0, 4: 1, 5: 2, 6: 2, 7: 2 }; // person index -> form (אני can be either, so it is skipped)
+function adjEntry(a, p) {
+  const f = ADJ_SUBJ[p];
+  const [ar, tr] = a.forms[f];
+  const id = `A:${a.id}:${p}`;
+  const e = { id, kind: 'adj', ar, tr, he: `${PERSONS[p][0]} · ${a.he} (${ADJ_FORM[f]})`, adj: a, p, f };
+  EXTRA.set(id, e);
+  return e;
+}
+function adjQuestions(n, adjs = course.adjs || []) {
+  const qs = [];
+  const persons = Object.keys(ADJ_SUBJ).map(Number);
+  for (let i = 0; i < n && adjs.length; i++) qs.push({ e: adjEntry(pick(adjs), pick(persons)), type: pick(['adjPick', 'adjPick', 'adjForm']) });
+  return qs;
+}
+// adjectives whose forms appear in a lesson's words
+function lessonAdjs(l) {
+  const words = new Set(l.entries.flatMap((e) => sentWords(e.ar).map(normAr)));
+  return (course.adjs || []).filter((a) => a.forms.some(([ar]) => words.has(normAr(ar))));
+}
 
 // ---- daily practice of mistakes: every wrong answer waits here until it is answered right in the daily drill ----
 const mistakeList = () => Object.entries(P.mistakes || {}).sort((a, b) => a[1].d.localeCompare(b[1].d));
 function addMistake(e) {
-  if (!ENTRY.has(e.id) && e.kind !== 'conj') return;
+  if (!ENTRY.has(e.id) && e.kind !== 'conj' && e.kind !== 'adj') return;
   P.mistakes = P.mistakes || {};
   const m = P.mistakes[e.id];
   P.mistakes[e.id] = { d: m?.d || today(), n: (m?.n || 0) + 1 };
@@ -506,6 +529,11 @@ function addMistake(e) {
 function clearMistake(id) { if (P.mistakes?.[id]) { delete P.mistakes[id]; saveP(); } }
 function entryFromId(id) {
   if (ENTRY.has(id)) return ENTRY.get(id);
+  if (id.startsWith('A:')) {
+    const [, aid, ap] = id.split(':');
+    const a = (course.adjs || []).find((x) => x.id === aid);
+    return a && ADJ_SUBJ[ap] !== undefined ? adjEntry(a, +ap) : null;
+  }
   const [, vid, tid, p] = id.split(':');
   const v = (course.verbs || []).find((x) => x.id === vid);
   const t = (course.tenses || []).find((x) => x.id === tid);
@@ -513,7 +541,7 @@ function entryFromId(id) {
 }
 function dailyQuestions() {
   return mistakeList().slice(0, 20).map(([id]) => entryFromId(id)).filter(Boolean)
-    .map((e) => (e.kind === 'conj' ? { e, type: 'conjPick', tenses: (course.tenses || []).filter((t) => e.verb.forms[t.id]) } : makeQuestion(e)));
+    .map((e) => (e.kind === 'conj' ? { e, type: 'conjPick', tenses: (course.tenses || []).filter((t) => e.verb.forms[t.id]) } : e.kind === 'adj' ? { e, type: 'adjPick' } : makeQuestion(e)));
 }
 
 // ---- "which form fits the sentence?" (cloze): a verb or adjective in a sentence is blanked out ----
@@ -526,6 +554,10 @@ function clozeWords() {
   }
   const bidd = ['بِدّي', 'بِدَّك', 'بِدِّك', 'بِدُّه', 'بِدّها', 'بِدّنا', 'بِدّكُم', 'بِدّهُم'];
   for (const b of bidd) CLOZE_WORDS.set(normAr(b), { list: bidd });
+  for (const a of course.adjs || []) {
+    const list = a.forms.map(([ar]) => ar);
+    for (const w of list) if (!CLOZE_WORDS.has(normAr(w))) CLOZE_WORDS.set(normAr(w), { list });
+  }
   for (const e of ENTRY.values()) {
     if (e.kind !== 'word' || /\s/.test(e.ar.trim()) || CLOZE_WORDS.has(normAr(e.ar))) continue;
     const w = stripHarakat(e.ar).replace(/[؟?!.،]/g, '');
@@ -623,6 +655,8 @@ function lessonQuiz(l) {
   const write = (short.length ? [pick(short)] : S.slice(0, 1)).map((e) => ({ e, type: 'type' }));
   const tenses = l.cat === 'conj' ? tensesUpTo(l) : [];
   const conj = tenses.length ? conjQuestions(tenses, 3).sort((a, b) => (a.type === 'conjPick') - (b.type === 'conjPick')) : [];
+  const adjs = ['adj', 'feel'].includes(l.cat) ? course.adjs || [] : lessonAdjs(l);
+  conj.push(...adjQuestions(adjs.length ? (['adj', 'feel'].includes(l.cat) ? 3 : 2) : 0, adjs));
   const build = stage('build', 2);
   const rest = cloze.length + sent.length + write.length + conj.length + build.length;
   const fill = Math.max(0, 12 - rest - 8);
@@ -659,15 +693,18 @@ function viewQuiz(id, mode) {
     extra = dailyQuestions(); n = 0; title = 'תרגול טעויות יומי'; back = '#/review';
   } else if (id === 'conj') {
     const upTo = mode.startsWith('t:') ? null : LESSONS.find((x) => x.id === mode);
-    const tenses = upTo ? tensesUpTo(upTo) : (course.tenses || []).filter((t) => mode.slice(2).split(',').includes(t.id));
-    setHeader('תרגול הטיות פעלים', upTo ? `#/lesson/${upTo.id}` : '#/review'); setTab(upTo ? 'home' : 'review');
-    if (!tenses.length) {
+    const ids = mode.slice(2).split(',');
+    const tenses = upTo ? tensesUpTo(upTo) : (course.tenses || []).filter((t) => ids.includes(t.id));
+    const withAdj = !upTo && ids.includes('adj') && (course.adjs || []).length;
+    setHeader('תרגול הטיות', upTo ? `#/lesson/${upTo.id}` : '#/review'); setTab(upTo ? 'home' : 'review');
+    if (!tenses.length && !withAdj) {
       const first = LESSONS.find((l) => l.id === course.tenses?.[0]?.lesson);
       $app.innerHTML = `<div class="empty">תרגול ההטיות נפתח כשמגיעים לשיעור על נטיית הפועל בהווה.${first ? `<br><br><a class="btn" href="#/lesson/${first.id}">לשיעור: ${esc(first.title)}</a>` : ''}</div>`;
       return;
     }
-    title = 'תרגול הטיות פעלים'; back = upTo ? `#/lesson/${upTo.id}` : '#/quiz/conj';
-    extra = conjQuestions(tenses, 12); n = 0;
+    title = 'תרגול הטיות'; back = upTo ? `#/lesson/${upTo.id}` : '#/quiz/conj';
+    const nAdj = withAdj ? (tenses.length ? 4 : 12) : 0;
+    extra = [...(tenses.length ? conjQuestions(tenses, 12 - nAdj) : []), ...(nAdj ? adjQuestions(nAdj) : [])]; n = 0;
   } else if (id === 'sent') {
     entries = sentencePool(); title = 'בניית משפטים'; back = '#/review'; n = 10; mode = 'sent';
   } else if (id === 'review') {
@@ -730,14 +767,14 @@ function viewQuiz(id, mode) {
 }
 
 function viewConjPicker() {
-  setHeader('תרגול הטיות פעלים', '#/review'); setTab('review');
-  const all = course.tenses || [];
+  setHeader('תרגול הטיות', '#/review'); setTab('review');
+  const all = [...(course.tenses || []), ...((course.adjs || []).length ? [{ id: 'adj', title: 'תארים: זכר / נקבה / רבים' }] : [])];
   const learned = tensesUpTo().map((t) => t.id);
-  let chosen = new Set(store.get('lingo:conjTenses', null) || (learned.length ? learned : all.slice(0, 1).map((t) => t.id)));
+  let chosen = new Set(store.get('lingo:conjTenses', null) || [...learned, ...all.filter((t) => t.id === 'adj').map((t) => t.id)]);
   const render = () => {
-    $app.innerHTML = `<div class="card"><h3>אילו זמנים לתרגל?</h3>
+    $app.innerHTML = `<div class="card"><h3>מה לתרגל?</h3>
       <p class="small muted">מסומנים הזמנים מהשיעורים שכבר פתחת. אפשר לבחור כל שילוב.</p>
-      ${all.map((t) => `<label class="field"><span>${esc(t.title)}${learned.includes(t.id) ? '' : ' <span class="muted small">(עוד לא נלמד)</span>'}</span>
+      ${all.map((t) => `<label class="field"><span>${esc(t.title)}${learned.includes(t.id) || t.id === 'adj' ? '' : ' <span class="muted small">(עוד לא נלמד)</span>'}</span>
         <input type="checkbox" class="switch" data-t="${t.id}" ${chosen.has(t.id) ? 'checked' : ''}></label>`).join('')}
       <button class="btn block" id="go" style="margin-top:12px" ${chosen.size ? '' : 'disabled'}>▶ להתחיל</button></div>`;
     $app.querySelectorAll('[data-t]').forEach((c) => (c.onchange = () => {
@@ -813,6 +850,17 @@ function renderQuestion(q, qi, total, record, next) {
       prompt = `<div class="q">באיזה זמן?</div><div class="big-ar">${arSpan(e.ar)}</div>${playBtn(e.id)}<div class="muted small">${esc(PERSONS[e.p][0])} · ${esc(e.verb.he)}</div>`;
       label = (t) => t.title; isRight = (t) => t.id === e.tense.id; autoplay = true; break;
     }
+    case 'adjPick': {
+      choices = shuffle(e.adj.forms.map(([ar], f) => ({ ar, f })));
+      prompt = `<div class="q">בחר/י את הצורה הנכונה של התואר</div><div class="he-big">${esc(PERSONS[e.p][0])} ${arSpan(PERSONS[e.p][1])}</div>
+        <div><b>${esc(e.adj.he)}</b></div>${hintTr(e.tr)}`;
+      label = (c) => c.ar; choiceAr = true; isRight = (c) => c.ar === e.ar; break;
+    }
+    case 'adjForm': {
+      choices = ADJ_FORM.map((t, f) => ({ t, f })).filter((c) => c.f === e.f || e.adj.forms[c.f][0] !== e.ar);
+      prompt = `<div class="q">זכר, נקבה או רבים?</div><div class="big-ar">${arSpan(e.ar)}</div>${playBtn(e.id)}<div class="muted small">${esc(e.adj.he)}</div>`;
+      label = (c) => c.t; isRight = (c) => c.f === e.f; autoplay = true; break;
+    }
     case 'cloze': {
       const c = q.cloze || (q.cloze = makeCloze(e));
       const shown = c.words.map((w, i) => (i === c.i ? '<span class="blank">______</span>' : esc(arText(w)))).join(' ');
@@ -836,7 +884,7 @@ function renderQuestion(q, qi, total, record, next) {
     if (!ok) b.classList.add('wrong');
     if (ENTRY.has(e.id)) grade(e.id, ok);
     record(ok);
-    showFeedback(e, ok, next, !['ar2he', 'listen', 'letterPick', 'listenAr', 'conjWho', 'conjTense'].includes(type));
+    showFeedback(e, ok, next, !['ar2he', 'listen', 'letterPick', 'listenAr', 'conjWho', 'conjTense', 'adjForm'].includes(type));
   }));
 }
 // after a wrong conjugation answer: the whole tense of that verb, the asked person highlighted
@@ -846,6 +894,11 @@ function conjFeedbackTable(e) {
     <table class="grid conj-table">${PERSONS.map((p, i) => `<tr class="${forms[i][0] === e.ar ? 'hl' : ''}"><td>${esc(p[0])} ${arSpan(p[1])}</td>
       <td data-play="${esc(forms[i][0])}">${arSpan(forms[i][0])}</td><td class="tr small">${esc(forms[i][1])}</td></tr>`).join('')}</table></div>`;
 }
+function adjFeedbackTable(e) {
+  return `<div style="margin-top:10px"><div class="small"><b>${esc(e.adj.he)}</b></div>
+    <table class="grid conj-table">${e.adj.forms.map(([ar, tr], f) => `<tr class="${f === e.f ? 'hl' : ''}"><td>${ADJ_FORM[f]}</td>
+      <td data-play="${esc(ar)}">${arSpan(ar)}</td><td class="tr small">${esc(tr)}</td></tr>`).join('')}</table></div>`;
+}
 function showFeedback(e, ok, next, speakNow) {
   const fb = document.getElementById('fb');
   // "continue" sits above the explanation so it is reachable without scrolling
@@ -853,7 +906,7 @@ function showFeedback(e, ok, next, speakNow) {
     <div class="feedback ${ok ? 'good' : 'bad'}" style="margin-top:10px">
     <div class="row"><b class="grow">${ok ? '✓ נכון!' : '✗ לא בדיוק'}</b>${playBtn(e.id)}</div>
     <div>${arSpan(e.ar, 'mid-ar')}</div>${e.tr ? `<div class="tr">${esc(e.tr)}</div>` : ''}<div>${esc(e.he)}</div>
-    ${!ok && e.kind === 'conj' ? conjFeedbackTable(e) : ''}
+    ${!ok && e.kind === 'conj' ? conjFeedbackTable(e) : ''}${!ok && e.kind === 'adj' ? adjFeedbackTable(e) : ''}
     ${e.kind !== 'letter' ? `<div style="margin-top:6px">${explainBtn(e)}</div>` : ''}</div>`;
   bindPlay(fb);
   if (settings.autoplay && (speakNow || !ok)) speakEntry(e);
@@ -993,7 +1046,7 @@ function viewReview() {
     </div>
     <div class="card"><h3>תרגולים נוספים</h3>
       <p class="small muted" style="margin:0 0 8px">${tenses.length ? `הטיות לפי מה שלמדת: ${tenses.map((t) => esc(t.title)).join(', ')}. אפשר לבחור גם זמנים אחרים.` : 'אפשר לבחור אילו זמנים לתרגל.'}</p>
-      <div class="btns"><a class="btn secondary" href="#/quiz/conj">🔁 הטיות פעלים</a><a class="btn secondary" href="#/quiz/sent">🧩 בניית משפטים</a></div>
+      <div class="btns"><a class="btn secondary" href="#/quiz/conj">🔁 הטיות פעלים ותארים</a><a class="btn secondary" href="#/quiz/sent">🧩 בניית משפטים</a></div>
     </div>
     ${!seen.length ? `<div class="empty">עוד לא למדת מילים. התחל מהשיעור הראשון 🙂<br><br><a class="btn" href="#/">לשיעורים</a></div>` : ''}`;
 }
@@ -1049,6 +1102,7 @@ function viewDict(catId) {
     $app.innerHTML = `${tables.map((l) => `<details class="card" open><summary><b>${esc(l.title)}</b></summary><div style="margin-top:10px">${renderTable(l.table)}</div></details>`).join('')}
       <a class="btn block" style="margin-bottom:12px" href="#/quiz/dict/${cat.id}">✏️ לתרגל את הנושא (${list.length} מילים)</a>
       ${cat.id === 'conj' ? `<a class="btn secondary block" style="margin-bottom:12px" href="#/quiz/conj">🔁 תרגול בחירת הטיה נכונה</a>` : ''}
+      ${['adj', 'feel'].includes(cat.id) && (course.adjs || []).length ? `<a class="btn secondary block" style="margin-bottom:12px" href="#/quiz/conj/t:adj">🔁 תרגול תארים: זכר/נקבה/רבים</a>` : ''}
       <div class="card">${list.map((e) => entryRow(e)).join('')}</div>`;
     bindPlay();
     return;
@@ -1110,6 +1164,10 @@ function conjTable(v) {
     ${PERSONS.map((p, i) => `<tr><td>${esc(p[0])}</td>${tenses.map((t) => `<td data-play="${esc(v.forms[t][i][0])}">${arSpan(v.forms[t][i][0])}<div class="tr small">${esc(v.forms[t][i][1])}</div></td>`).join('')}</tr>`).join('')}
     </table><div class="small muted">לחיצה על מילה משמיעה אותה</div></div>`;
 }
+function adjTable(a) {
+  return `<div class="card"><h3>${esc(a.he)} – זכר, נקבה ורבים</h3><table class="grid conj-table">
+    ${a.forms.map(([ar, tr], f) => `<tr><td>${ADJ_FORM[f]}</td><td data-play="${esc(ar)}">${arSpan(ar)}<div class="tr small">${esc(tr)}</div></td></tr>`).join('')}</table></div>`;
+}
 function renderQuickDict(q) {
   const out = document.getElementById('qdOut');
   if (!q) {
@@ -1119,13 +1177,14 @@ function renderQuickDict(q) {
   const hits = quickSearch(q);
   const nq = heNorm(q);
   const verbs = /[א-ת]/.test(q) ? (course.verbs || []).filter((v) => v.he === nq || (nq.length >= 3 && v.he.includes(nq))) : [];
+  const adjs = /[א-ת]/.test(q) ? (course.adjs || []).filter((a) => a.he === nq || (nq.length >= 3 && a.he.includes(nq))) : [];
   const rows = hits.map((e) => `<div class="word-row">${playBtn(e.id)}<div class="grow">${arSpan(e.ar)}<div class="tr">${esc(e.tr)}</div><div>${esc(e.he)}${e.note ? ` <span class="muted small">(${esc(e.note)})</span>` : ''}</div></div>
     ${isOnline() ? `<button class="icon-btn" style="font-size:20px" data-explain="${esc(e.id)}" title="הסבר עם Claude" aria-label="הסבר עם Claude">✨</button>` : ''}</div>`).join('');
   const online = isOnline() ? `<div class="btns" style="margin-top:8px">
       <button class="btn ghost" id="qdClaude">✨ שאל את Claude איך אומרים "${esc(q)}"</button>
       <a class="btn ghost" target="_blank" rel="noopener" href="https://translate.google.com/?sl=iw&tl=ar&op=translate&text=${encodeURIComponent(q)}">🌐 Google Translate</a></div>
       <p class="small muted">שים לב: Google מתרגם לערבית ספרותית, לא למדוברת.</p>` : '';
-  out.innerHTML = `${verbs.map(conjTable).join('')}${rows ? `<div class="card">${rows}</div>` : `<div class="empty">לא מצאתי את זה במילון של האפליקציה.${isOnline() ? '' : '<br>עם אינטרנט אפשר לשאול את Claude.'}</div>`}${online}`;
+  out.innerHTML = `${verbs.map(conjTable).join('')}${adjs.map(adjTable).join('')}${rows ? `<div class="card">${rows}</div>` : `<div class="empty">לא מצאתי את זה במילון של האפליקציה.${isOnline() ? '' : '<br>עם אינטרנט אפשר לשאול את Claude.'}</div>`}${online}`;
   bindPlay(out);
   const ask = document.getElementById('qdClaude');
   if (ask) ask.onclick = () => openExplain(howToSayPrompt(q), 'say:' + q);
@@ -1154,7 +1213,7 @@ const CLAUDE_MODEL = 'claude-opus-5-5';
 const ANTHROPIC_SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.129.0/+esm';
 const LEARNER = 'אני דובר עברית שלומד ערבית מדוברת (פלסטינית/לבנטינית). ענה בעברית, בקצרה ובבהירות, בלי טבלאות. כתוב כל מילה ערבית גם בכתב ערבי וגם בתעתיק עברי.';
 const explainPrompt = (e) => `${LEARNER}
-הסבר לי את ${e.kind === 'conj' ? 'צורת הפועל' : 'הביטוי'}: "${e.ar}" (תעתיק: ${e.tr}; פירוש: ${e.he}).
+הסבר לי את ${e.kind === 'conj' ? 'צורת הפועל' : e.kind === 'adj' ? 'צורת התואר' : 'הביטוי'}: "${e.ar}" (תעתיק: ${e.tr}; פירוש: ${e.he}).
 1. פרק למילים (וגם לתחיליות/סיומות כמו بـ, الـ, ـي, ـك): לכל חלק המשמעות המילולית שלו.
 2. תרגום מילולי, מילה במילה, של הכל.
 3. למה אומרים את זה ככה: שורש, הטיה, דקדוק או ביטוי קבוע, ואם יש הבדל מהערבית הספרותית.

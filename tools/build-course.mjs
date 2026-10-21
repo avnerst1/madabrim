@@ -8,16 +8,16 @@ if (!dir) { console.error('usage: node tools/build-course.mjs courses/<id>'); pr
 const src = fs.readFileSync(path.join(dir, 'course.txt'), 'utf8').split('\n');
 
 const AR = /[؀-ۿ]/;
-const course = { id: '', title: '', lang: '', ui: '', version: 1, categories: [], units: [], tenses: [], verbs: [] };
+const course = { id: '', title: '', lang: '', ui: '', version: 1, categories: [], units: [], tenses: [], verbs: [], adjs: [] };
 const overrides = new Map();
-let unit = null, lesson = null, verb = null;
+let unit = null, lesson = null, verb = null, adj = null;
 const errors = [];
 const seen = new Map();
 // conjugation drills: tenses a lesson can unlock ("X <tense>"), all but past derived from the bare (subjunctive) form
 const TENSES = { present: 'הווה', want: 'רוצה ל... (بِدّي)', future: 'עתיד (رَح)', progressive: 'עכשיו (عَم)', past: 'עבר' };
 const BIDD = [['بِدّي', 'בִּדִּי'], ['بِدَّك', 'בִּדַּכּ'], ['بِدِّك', 'בִּדֶּכּ'], ['بِدُّه', 'בִּדּוֹ'], ['بِدّها', 'בִּדְּהַא'], ['بِدّنا', 'בִּדְּנַא'], ['بِدّكُم', 'בִּדְּכֹּם'], ['بِدّهُم', 'בִּדְּהֹם']];
 function present([ar, tr], person) {
-  if (person === 0) return [ar.replace(/^آ/, 'با').replace(/^أَ?/, 'بَ'), tr.replace(/^אַ/, 'בַּ')];
+  if (person === 0) return [ar.replace(/^آ/, 'با').replace(/^أ([َُِ]?)/, (m, v) => 'ب' + (v || 'َ')), tr.replace(/^א([ַֻ])/, 'ב$1ּ')];
   if (/^ي/.test(ar)) return ['بي' + ar.slice(1).replace(/^ِ/, ''), /^י[ְִ]/.test(tr) ? 'בִּי' + tr.slice(2) : 'בְּ' + tr];
   return tr[1] === 'ְ' ? ['بِ' + ar, 'בִּ' + tr] : ['بْ' + ar, 'בְּ' + tr];
 }
@@ -46,6 +46,14 @@ src.forEach((raw, i) => {
     const [id, he] = split(line.slice(5));
     verb = { id, he, forms: {} };
     course.verbs.push(verb);
+  } else if (line.startsWith('@adj')) {
+    const [id, he] = split(line.slice(4));
+    adj = { id, he, forms: [] };
+    course.adjs.push(adj);
+  } else if (line.startsWith('VA ')) {
+    const cells = split(line.slice(3)).map((c) => c.split('~').map((x) => x.trim()));
+    if (cells.length !== 3 || cells.some((c) => c.length !== 2 || !AR.test(c[0]) || AR.test(c[1]))) errors.push(`${at}: adjective row needs 3 "ar ~ tr" cells (m | f | pl)`);
+    adj.forms = cells;
   } else if (/^V[SP] /.test(line)) {
     const cells = split(line.slice(3)).map((c) => c.split('~').map((x) => x.trim()));
     if (cells.length !== 8 || cells.some((c) => c.length !== 2 || !AR.test(c[0]) || AR.test(c[1]))) errors.push(`${at}: verb row needs 8 "ar ~ tr" cells`);
@@ -114,4 +122,4 @@ if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 fs.writeFileSync(path.join(dir, 'course.json'), JSON.stringify(course));
 const lessons = course.units.flatMap((u) => u.lessons);
 const count = lessons.reduce((n, l) => n + (l.items?.length || 0) + (l.letters?.length || 0) + (l.lines?.length || 0), 0);
-console.log(`${course.id} v${course.version}: ${course.units.length} units, ${lessons.length} lessons, ${count} entries, ${course.verbs.length} verbs, tenses: ${course.tenses.map((t) => t.id).join(' ')}`);
+console.log(`${course.id} v${course.version}: ${course.units.length} units, ${lessons.length} lessons, ${count} entries, ${course.verbs.length} verbs, ${course.adjs.length} adjectives, tenses: ${course.tenses.map((t) => t.id).join(' ')}`);
